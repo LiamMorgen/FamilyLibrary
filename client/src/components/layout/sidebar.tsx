@@ -15,29 +15,35 @@ export default function Sidebar() {
   const location = useLocation(); 
   const isMobile = useMobile();
   const { t } = useTranslation();
+  const token = localStorage.getItem('token'); // Get token
 
   // Hide sidebar on mobile
   if (isMobile) {
     return null;
   }
 
-  // Fetch current user
-  // const { data: currentUser } = useQuery<User>({ // 移除未使用的 currentUser
+  // Fetch current user only if token exists
+  // const { data: currentUser } = useQuery<User>({
   //   queryKey: ['/api/users/current'],
+  //   enabled: !!token, // Only enable if token exists
   // });
+  //上面的currentUser没有用到，所以我注释掉了
   useQuery<User>({
     queryKey: ['/api/users/current'],
+    enabled: !!token, // Only enable if token exists
   });
 
-  // Fetch family
-  const { data: family } = useQuery<Family>({
+
+  // Fetch family only if token exists
+  const { data: family, isLoading: isLoadingFamily } = useQuery<Family>({
     queryKey: ['/api/families/current'],
+    enabled: !!token, // Only enable if token exists
   });
 
-  // Fetch family members
-  const { data: familyMembers } = useQuery<User[]>({
+  // Fetch family members only if token exists and family data is loaded
+  const { data: familyMembers, isLoading: isLoadingFamilyMembers } = useQuery<User[]>({
     queryKey: ['/api/families/current/users'],
-    enabled: !!family
+    enabled: !!token && !!family, // Depend on token and family data
   });
 
   return (
@@ -46,7 +52,7 @@ export default function Sidebar() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="font-heading font-bold text-lg">
-              {family?.name || t('sidebar.family')}
+              {isLoadingFamily ? t('sidebar.loadingFamily') : (family?.name || t('sidebar.family'))}
             </h2>
             <p className="text-sm text-gray-500">{t('sidebar.familyLibrary')}</p>
           </div>
@@ -123,7 +129,9 @@ export default function Sidebar() {
         
         <div className="mt-6 pt-6 border-t border-gray-200">
           <h3 className="font-heading font-bold mb-2">{t('sidebar.familyMembers')}</h3>
-          {familyMembers ? (
+          {isLoadingFamilyMembers || isLoadingFamily ? (
+            <p className="text-sm text-gray-500">{t('sidebar.loadingMembers')}</p>
+          ) : familyMembers && familyMembers.length > 0 ? (
             <ul className="space-y-2">
               {familyMembers.map(member => (
                 <li key={member.id} className="flex items-center">
@@ -141,7 +149,7 @@ export default function Sidebar() {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">{t('sidebar.loadingMembers')}</p>
+            <p className="text-sm text-gray-500">{t('sidebar.noMembersFound')}</p> // Or a more appropriate message
           )}
         </div>
       </div>

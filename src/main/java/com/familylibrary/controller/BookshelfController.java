@@ -44,6 +44,14 @@ public class BookshelfController {
         return ResponseEntity.ok(bookshelves);
     }
 
+    @GetMapping
+    public ResponseEntity<List<BookshelfDto>> getAllBookshelves() {
+        // 这需要一个服务方法来获取当前用户有权访问的所有书架
+        // 或者一个更通用的 "list all" 方法，然后可能在服务层或查询时进行权限过滤
+        List<BookshelfDto> bookshelves = bookshelfService.getAllVisibleBookshelvesForCurrentUser(); // 假设有这样一个方法
+        return ResponseEntity.ok(bookshelves);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<BookshelfDto> updateBookshelf(@PathVariable Long id, @Valid @RequestBody UpdateBookshelfRequest request) {
         // Add authorization: ensure the authenticated user is the owner of the bookshelf

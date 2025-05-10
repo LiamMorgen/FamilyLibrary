@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+import io.jsonwebtoken.JwtException;
+
 @Component
 public class JwtUtil {
 
@@ -24,11 +26,7 @@ public class JwtUtil {
     private Long expirationTime; // in milliseconds
 
     private SecretKey getSigningKey() {
-        // Ensure the secret key is strong enough for HS256. If it's too short, Keys.hmacShaKeyFor will throw an error.
-        // A common practice is to use a base64 encoded string of sufficient length.
-        // For simplicity here, we'll assume secretString is already a sufficiently strong key or a base64 encoded one.
-        // If your secretString is not base64 encoded and might be short, consider deriving a longer key or using a properties file for a long, random string.
-        byte[] keyBytes = secretString.getBytes(); // Or Decoders.BASE64.decode(secretString) if it's Base64 encoded
+        byte[] keyBytes = secretString.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
@@ -71,7 +69,15 @@ public class JwtUtil {
     }
 
     public Boolean validateToken(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        try {
+            // This line will throw an exception if the signature is invalid or token is malformed/expired
+            Claims claims = extractAllClaims(token); 
+            final String usernameInToken = claims.getSubject();
+            return (usernameInToken.equals(userDetails.getUsername()) && !claims.getExpiration().before(new Date()));
+        } catch (JwtException | IllegalArgumentException e) {
+            // Log the exception, e.g., using a logger instance
+            // logger.warn("Token validation error: {}", e.getMessage());
+            return false;
+        }
     }
 } 

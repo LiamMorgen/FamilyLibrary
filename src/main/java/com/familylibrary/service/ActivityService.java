@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -76,6 +77,18 @@ public class ActivityService {
         Activity activity = activityRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Activity not found with id: " + id));
         return convertToDto(activity);
+    }
+
+    public List<ActivityDto> getAllVisibleActivitiesForCurrentUser(String type) {
+        // TODO: Implement logic to get all activities visible to the current user.
+        // This might involve: 
+        // 1. Getting the current authenticated user from Spring Security context.
+        // 2. Fetching activities based on user ID, family ID, or other visibility rules.
+        // 3. Filtering by 'type' if provided.
+        // 4. Converting to ActivityDto.
+
+        System.out.println("DEBUG: ActivityService.getAllVisibleActivitiesForCurrentUser(type: " + type + ") called - placeholder implementation. Returning empty list.");
+        return new ArrayList<>(); // Placeholder
     }
     
     // We might not need a public delete method for activities, as they are often audit logs.

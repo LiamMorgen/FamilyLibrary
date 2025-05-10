@@ -17,7 +17,9 @@ server:
   port: 8080
 
 jwt:
-  secret: ${JWT_SECRET:ReplacedDefaultWeakKeyWithAStrongerOneExample_MustBeAtLeast32CharsLong_Preferably64_abc123XYZ789}
+  # Temporarily using a fixed strong secret for debugging. 
+  # Replace with your own secure key, possibly from an environment variable in production.
+  secret: ThisIsMySuperSecureAndLongFixedSecretKeyForTestingPurposes1234567890
   expiration: 86400000 # 24 hours in milliseconds
 
 logging:

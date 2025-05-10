@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -129,5 +130,18 @@ public class BookshelfService {
         dto.setCreatedAt(bookshelf.getCreatedAt());
         dto.setUpdatedAt(bookshelf.getUpdatedAt());
         return dto;
+    }
+
+    public List<BookshelfDto> getAllVisibleBookshelvesForCurrentUser() {
+        // TODO: 在这里实现获取当前登录用户有权访问的所有书架的逻辑。
+        // 这可能涉及到:
+        // 1. 从 Spring Security 上下文中获取当前认证的用户。
+        // 2. 根据用户的ID、所属家庭的ID，或者书架的公共/私有状态等条件来查询数据库。
+        // 3. 将查询结果转换为 BookshelfDto 列表。
+
+        // 作为一个临时的占位符，我们返回一个空列表。
+        // 你可以添加一些日志来确认此方法是否被调用。
+        System.out.println("DEBUG: BookshelfService.getAllVisibleBookshelvesForCurrentUser() called - placeholder implementation. Returning empty list.");
+        return new ArrayList<>();
     }
 } 

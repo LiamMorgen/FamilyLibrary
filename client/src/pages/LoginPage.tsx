@@ -32,12 +32,12 @@ const LoginPage: React.FC = () => {
 
             if (response.ok) {
                 // 登录成功
-                console.log('登录成功:', data);
+                console.log('登录成功，准备导航:', data);
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('username', data.username);
-                // TODO: 重定向到主页或 dashboard
-                // window.location.href = '/'; // 简单的重定向，之后会用 React Router 改进
+                console.log('Token 已设置, localStorage:', localStorage.getItem('token'));
                 navigate('/');
+                console.log('导航已调用，目标 /');
             } else {
                 // 登录失败
                 setError(data.message || data.error || '登录失败，请检查您的凭据。');

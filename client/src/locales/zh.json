@@ -33,7 +33,8 @@
     "profile": "我的"
   },
   "dashboard": {
-    "welcome": "欢迎回来，{{name}}",
+    "welcome": "欢迎回来, {{user}}",
+    "user": "用户",
     "today": "今天是 {{date}}",
     "addNewBook": "添加新书",
     "totalBooks": "总藏书",

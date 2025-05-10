@@ -16,10 +16,12 @@ import {
 export default function Header() {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
+  const token = localStorage.getItem('token'); // Get token
 
-  // Fetch current user
-  const { data: currentUser } = useQuery<User>({
+  // Fetch current user only if token exists
+  const { data: currentUser, isLoading: isLoadingCurrentUser } = useQuery<User>({
     queryKey: ['/api/users/current'],
+    enabled: !!token, // <--- Only enable if token exists
   });
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -70,7 +72,7 @@ export default function Header() {
                 className="w-8 h-8 rounded-full mr-2"
               />
               <span className="hidden md:inline-block">
-                {currentUser?.displayName || t('header.user')}
+                {isLoadingCurrentUser ? t('header.loadingUser') : (currentUser?.displayName || t('header.user'))}
               </span>
               <i className="fas fa-chevron-down ml-1 text-xs"></i>
             </DropdownMenuTrigger>

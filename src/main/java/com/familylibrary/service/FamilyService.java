@@ -106,6 +106,18 @@ public class FamilyService {
         familyRepository.deleteById(familyId);
     }
 
+    public FamilyDto getFamilyForCurrentUser() {
+        // TODO: Implement logic to get the family for the current authenticated user.
+        // This would typically involve:
+        // 1. Getting the current authenticated user from Spring Security context.
+        // 2. Finding the family associated with this user (e.g., user.getFamilies() if a user can belong to multiple, or a direct family_id foreign key).
+        // 3. If a user can be in multiple families, you might need a concept of a "current" or "primary" family, or return a list.
+        // 4. For now, assuming a user belongs to one primary family or you want to return the first one found.
+        // 5. Converting to FamilyDto.
+
+        System.out.println("DEBUG: FamilyService.getFamilyForCurrentUser() called - placeholder implementation. Returning null.");
+        return null; // Placeholder - you'll likely want to throw an exception or return an Optional if no family is found.
+    }
 
     private FamilyDto convertToDto(Family family) {
         FamilyDto dto = new FamilyDto();

@@ -55,4 +55,12 @@ public class FamilyController {
         familyService.deleteFamily(familyId);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/current")
+    public ResponseEntity<FamilyDto> getCurrentUserFamily() {
+        // 这个方法需要从 SecurityContextHolder 获取当前认证的用户，
+        // 然后查询该用户所属的家庭。
+        FamilyDto family = familyService.getFamilyForCurrentUser(); // 假设有这样一个方法
+        return ResponseEntity.ok(family);
+    }
 } 

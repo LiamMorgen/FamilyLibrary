@@ -86,7 +86,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
         <div>
           <h1 className="font-heading text-2xl font-bold text-primary">
-            {t('dashboard.welcome', { name: currentUser?.displayName || t('dashboard.user') })}
+            {t('dashboard.welcome', { user: currentUser?.displayName || currentUser?.username || t('dashboard.user') })}
           </h1>
           <p className="text-gray-600">{t('dashboard.today', { date: formatDate(new Date()) })}</p>
         </div>

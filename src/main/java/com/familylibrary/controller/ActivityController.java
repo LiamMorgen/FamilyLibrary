@@ -37,6 +37,12 @@ public class ActivityController {
         ActivityDto activity = activityService.getActivityById(id);
         return ResponseEntity.ok(activity);
     }
+
+    @GetMapping
+    public ResponseEntity<List<ActivityDto>> getAllActivities(@RequestParam(required = false) String type) {
+        List<ActivityDto> activities = activityService.getAllVisibleActivitiesForCurrentUser(type);
+        return ResponseEntity.ok(activities);
+    }
     
     // As activities are generally immutable logs, PUT and DELETE endpoints are typically not provided.
 } 
