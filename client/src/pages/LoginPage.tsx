@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -7,6 +8,7 @@ const LoginPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+    const { login } = useAuth();
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -33,9 +35,8 @@ const LoginPage: React.FC = () => {
             if (response.ok) {
                 // 登录成功
                 console.log('登录成功，准备导航:', data);
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('username', data.username);
-                console.log('Token 已设置, localStorage:', localStorage.getItem('token'));
+                login(data.token);
+                console.log('Token 已通过 AuthContext 设置');
                 navigate('/');
                 console.log('导航已调用，目标 /');
             } else {

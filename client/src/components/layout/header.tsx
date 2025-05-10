@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
 // import { Link, useNavigate } from "react-router-dom"; // 移除未使用的导入
 import type { User } from "@/lib/types";
 import { 
@@ -16,12 +17,12 @@ import {
 export default function Header() {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
-  const token = localStorage.getItem('token'); // Get token
+  const { token, logout } = useAuth(); // Get token and logout from AuthContext
 
   // Fetch current user only if token exists
   const { data: currentUser, isLoading: isLoadingCurrentUser } = useQuery<User>({
-    queryKey: ['/api/users/current'],
-    enabled: !!token, // <--- Only enable if token exists
+    queryKey: ['/api/users/current', token], // Add token to queryKey so it refetches if token changes
+    enabled: !!token, 
   });
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -32,6 +33,12 @@ export default function Header() {
 
   const changeLanguage = (language: string) => {
     i18n.changeLanguage(language);
+  };
+
+  const handleLogout = () => {
+    logout();
+    // queryClient.clear(); // Optional: clear react-query cache on logout
+    // navigate("/login"); // navigate is not defined here, logout in AuthContext can handle redirection if needed
   };
 
   return (
@@ -93,7 +100,7 @@ export default function Header() {
                 <span className={i18n.language === 'en' ? 'font-bold' : ''}>English</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout}>
                 <i className="fas fa-sign-out-alt mr-2"></i> {t('header.logout')}
               </DropdownMenuItem>
             </DropdownMenuContent>

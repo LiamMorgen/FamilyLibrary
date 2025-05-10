@@ -41,7 +41,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwtToken = authorizationHeader.substring(7);
-            filterLogger.debug("Extracted JWT: {}", jwtToken);
+            filterLogger.debug("Authorization header found with Bearer prefix. Extracted JWT: {}", jwtToken);
             try {
                 username = jwtUtil.extractUsername(jwtToken);
                 filterLogger.debug("Username extracted from JWT: {}", username);
@@ -61,7 +61,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 filterLogger.error("Unexpected error during JWT username extraction", e);
             }
         } else {
-            filterLogger.trace("Authorization header does not exist or does not start with Bearer: {}", request.getRequestURI());
+            filterLogger.debug("Authorization header does not exist or does not start with Bearer. URI: {}", request.getRequestURI());
         }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -85,13 +85,13 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                         SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
                         filterLogger.debug("User {} authenticated and SecurityContext updated.", username);
                     } else {
-                        filterLogger.warn("JWT token validation failed for user: {}", username);
+                        filterLogger.warn("JWT token validation failed for user: {}. Token used: {}", username, jwtToken);
                     }
                 } catch (Exception e) {
                     filterLogger.error("Error during token validation for user {}: {}", username, e.getMessage(), e);
                 }
             } else {
-                filterLogger.warn("User details not found for username from token: {}", username);
+                filterLogger.warn("User details not found for username '{}' extracted from token. Token: {}", username, jwtToken);
             }
         } else if (username == null && jwtToken != null) {
             filterLogger.warn("JWT present but username could not be extracted. Token: {}", jwtToken);

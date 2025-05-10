@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -61,6 +64,23 @@ public class UserController {
         // DO NOT include password or other sensitive fields
 
         return ResponseEntity.ok(responseUser);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<UserDto>> getAllUsers() {
+        List<User> users = userRepository.findAll();
+        List<UserDto> userDtos = users.stream().map(user -> {
+            UserDto dto = new UserDto();
+            dto.setId(user.getId());
+            dto.setUsername(user.getUsername());
+            dto.setDisplayName(user.getDisplayName());
+            dto.setEmail(user.getEmail());
+            dto.setAvatar(user.getAvatar());
+            dto.setOnline(user.isOnline());
+            // DO NOT include password or other sensitive fields
+            return dto;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(userDtos);
     }
 
     // TODO: Add GET /api/users for listing all users (admin functionality)
