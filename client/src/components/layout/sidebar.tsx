@@ -1,0 +1,163 @@
+// import { useEffect } from "react"; // 移除
+// import { useLocation, Link } from "wouter"; // 移除 wouter 导入
+import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
+import { useMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
+import type { User, Family } from "@/lib/types";
+// import { cn } from "@/lib/utils"; // 移除
+import { Link, useLocation } from "react-router-dom"; // 移除了 useNavigate
+// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // 移除
+// import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // 移除
+// import { ScrollArea } from "@/components/ui/scroll-area"; // 移除
+
+export default function Sidebar() {
+  const location = useLocation(); 
+  const isMobile = useMobile();
+  const { t } = useTranslation();
+
+  // Hide sidebar on mobile
+  if (isMobile) {
+    return null;
+  }
+
+  // Fetch current user
+  // const { data: currentUser } = useQuery<User>({ // 移除未使用的 currentUser
+  //   queryKey: ['/api/users/current'],
+  // });
+  useQuery<User>({
+    queryKey: ['/api/users/current'],
+  });
+
+  // Fetch family
+  const { data: family } = useQuery<Family>({
+    queryKey: ['/api/families/current'],
+  });
+
+  // Fetch family members
+  const { data: familyMembers } = useQuery<User[]>({
+    queryKey: ['/api/families/current/users'],
+    enabled: !!family
+  });
+
+  return (
+    <aside className="hidden md:block bg-white w-64 shadow-lg">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="font-heading font-bold text-lg">
+              {family?.name || t('sidebar.family')}
+            </h2>
+            <p className="text-sm text-gray-500">{t('sidebar.familyLibrary')}</p>
+          </div>
+          <div className="bg-primary/10 text-primary p-2 rounded-full">
+            <i className="fas fa-home"></i>
+          </div>
+        </div>
+        
+        <nav>
+          <ul>
+            <li className="mb-1">
+              <Link to="/"> {/* 确保 Link 是 react-router-dom 的 Link, 使用 to prop */}
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-th-large w-5"></i>
+                  <span className="ml-2">{t('sidebar.dashboard')}</span>
+                </div>
+              </Link>
+            </li>
+            <li className="mb-1">
+              <Link to="/my-bookshelf"> {/* 使用 to prop */}
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/my-bookshelf' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-bookmark w-5"></i>
+                  <span className="ml-2">{t('sidebar.myBookshelf')}</span>
+                </div>
+              </Link>
+            </li>
+            <li className="mb-1">
+              <Link to="/family-bookshelf"> {/* 使用 to prop */}
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/family-bookshelf' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-users w-5"></i>
+                  <span className="ml-2">{t('sidebar.familyBookshelf')}</span>
+                </div>
+              </Link>
+            </li>
+            <li className="mb-1">
+              <Link to="/borrowing-records"> {/* 使用 to prop */}
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/borrowing-records' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-exchange-alt w-5"></i>
+                  <span className="ml-2">{t('sidebar.borrowingRecords')}</span>
+                  <span className="ml-auto bg-red-500 text-white text-xs px-1 rounded">2</span>
+                </div>
+              </Link>
+            </li>
+            <li className="mb-1">
+              <Link to="/reading-stats"> {/* 使用 to prop */}
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/reading-stats' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-chart-bar w-5"></i>
+                  <span className="ml-2">{t('sidebar.readingStats')}</span>
+                </div>
+              </Link>
+            </li>
+          </ul>
+        </nav>
+        
+        <div className="mt-6 pt-6 border-t border-gray-200">
+          <h3 className="font-heading font-bold mb-2">{t('sidebar.familyMembers')}</h3>
+          {familyMembers ? (
+            <ul className="space-y-2">
+              {familyMembers.map(member => (
+                <li key={member.id} className="flex items-center">
+                  <img 
+                    src={member.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.displayName)}`} 
+                    alt={member.displayName} 
+                    className="w-8 h-8 rounded-full"
+                  />
+                  <span className="ml-2">{member.displayName}</span>
+                  <span 
+                    className={`ml-auto text-xs ${member.isOnline ? 'bg-green-500' : 'bg-gray-300'} w-2 h-2 rounded-full`} 
+                    title={member.isOnline ? t('sidebar.online') : t('sidebar.offline')}
+                  ></span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-500">{t('sidebar.loadingMembers')}</p>
+          )}
+        </div>
+      </div>
+      
+      <div className="px-4 py-2 mt-4">
+        <div className="bg-accent/30 p-4 rounded-lg">
+          <h3 className="font-heading font-bold text-sm mb-2">{t('sidebar.addNewMember')}</h3>
+          <p className="text-xs text-gray-600 mb-3">{t('sidebar.inviteFamily')}</p>
+          <Button 
+            className="w-full flex items-center justify-center"
+            variant="default"
+          >
+            <i className="fas fa-user-plus mr-1"></i> {t('sidebar.inviteMember')}
+          </Button>
+        </div>
+      </div>
+    </aside>
+  );
+}

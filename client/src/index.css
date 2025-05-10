@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Open+Sans:wght@400;600&family=Roboto+Mono&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 214 32% 27%;
+  --muted: 198 100% 98%;
+  --muted-foreground: 214 32% 27%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 214 32% 27%;
+  --card: 0 0% 100%;
+  --card-foreground: 214 32% 27%;
+  --border: 198 16% 88%;
+  --input: 198 16% 88%;
+  --primary: 204 52% 25%;  /* #1B4965 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 195 47% 59%;  /* #62B6CB */
+  --secondary-foreground: 214 32% 27%;
+  --accent: 185 65% 83%;  /* #BEE9E8 */
+  --accent-foreground: 214 32% 27%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 60 9.1% 97.8%;
+  --ring: 214 32% 27%;
+  --radius: 0.5rem;
+
+  /* Chart colors */
+  --chart-1: 204 52% 25%;
+  --chart-2: 195 47% 59%;
+  --chart-3: 185 65% 83%;
+  --chart-4: 197 37% 24%;
+  --chart-5: 184 65% 39%;
+
+  /* Sidebar specific colors */
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 214 32% 27%;
+  --sidebar-primary: 204 52% 25%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 195 47% 59%;
+  --sidebar-accent-foreground: 214 32% 27%;
+  --sidebar-border: 198 16% 88%;
+  --sidebar-ring: 214 32% 27%;
+}
+
+.dark {
+  --background: 214 32% 10%;
+  --foreground: 0 0% 98%;
+  --muted: 214 32% 15%;
+  --muted-foreground: 214 32% 80%;
+  --popover: 214 32% 10%;
+  --popover-foreground: 0 0% 98%;
+  --card: 214 32% 10%;
+  --card-foreground: 0 0% 98%;
+  --border: 214 32% 15%;
+  --input: 214 32% 15%;
+  --primary: 204 52% 25%;  /* #1B4965 */
+  --primary-foreground: 0 0% 98%;
+  --secondary: 195 47% 45%;  /* Darker version of #62B6CB */
+  --secondary-foreground: 0 0% 98%;
+  --accent: 185 45% 70%;  /* Darker version of #BEE9E8 */
+  --accent-foreground: 214 32% 10%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --ring: 214 32% 80%;
+
+  /* Chart colors - dark mode */
+  --chart-1: 204 52% 35%;
+  --chart-2: 195 47% 59%;
+  --chart-3: 185 65% 73%;
+  --chart-4: 197 37% 44%;
+  --chart-5: 184 65% 59%;
+
+  /* Sidebar specific colors - dark mode */
+  --sidebar-background: 214 32% 15%;
+  --sidebar-foreground: 0 0% 98%;
+  --sidebar-primary: 204 52% 35%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 195 47% 45%;
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 214 32% 20%;
+  --sidebar-ring: 214 32% 80%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-gray-50 text-foreground font-body;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+
+  .system-text {
+    @apply font-mono;
+  }
+
+  .book-card {
+    @apply transition-all duration-300;
+  }
+
+  .book-card:hover {
+    @apply transform -translate-y-1 shadow-md;
+  }
+
+  .bookshelf-shelf {
+    @apply bg-[#a87c58] border border-[#8a6343] shadow;
+  }
+}
