@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -24,6 +23,7 @@ public class BookDto {
     private String status; // e.g., available, borrowed, reading
     private Long bookshelfId; // To know which bookshelf it belongs to
     private String bookshelfName; // Optional: denormalized for convenience
+    private ShelfPositionDto shelfPosition; // Added
     private LocalDateTime addedDate;
     private UserDto addedBy; // Who added the book (simplified to UserDto)
     private Integer totalPages;

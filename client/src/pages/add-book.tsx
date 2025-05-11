@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { BookForm } from "@/components/book-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function AddBookPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
@@ -23,9 +25,43 @@ export default function AddBookPage() {
   const position = searchParams.get('position') ? parseInt(searchParams.get('position')!) : 0;
 
   // Fetch bookshelves for selection
-  const { data: bookshelves, isLoading: isLoadingBookshelves } = useQuery<BookshelfType[]>({
-    queryKey: ['/api/bookshelves'],
+  const { data: ownedBookshelves, isLoading: isLoadingOwnedBookshelves } = useQuery<BookshelfType[], Error>({
+    queryKey: ['/api/bookshelves/owner/current'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/bookshelves/owner/current');
+      if (!response.ok) {
+        throw new Error('Failed to fetch owned bookshelves');
+      }
+      return response.json();
+    },
   });
+
+  const { data: familyBookshelves, isLoading: isLoadingFamilyBookshelves } = useQuery<BookshelfType[], Error>({
+    queryKey: ['/api/bookshelves/family/current'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/bookshelves/family/current');
+      if (!response.ok) {
+        throw new Error('Failed to fetch family bookshelves');
+      }
+      return response.json();
+    },
+    // Assuming a user might not be in a family, so handle empty/error gracefully
+    retry: false, 
+  });
+
+  const isLoadingBookshelves = isLoadingOwnedBookshelves || isLoadingFamilyBookshelves;
+
+  // Combine bookshelves, ensuring no duplicates if a bookshelf is both owned and in a family (though unlikely with current logic)
+  const allBookshelves = (() => {
+    const shelves = new Map<number, BookshelfType>();
+    (ownedBookshelves || []).forEach(shelf => shelves.set(shelf.id, shelf));
+    (familyBookshelves || []).forEach(shelf => {
+      if (!shelves.has(shelf.id)) { // Add only if not already present from owned list
+        shelves.set(shelf.id, shelf);
+      }
+    });
+    return Array.from(shelves.values());
+  })();
 
   // Handle ISBN search
   const handleIsbnSearch = () => {
@@ -64,9 +100,36 @@ export default function AddBookPage() {
                   initialBookshelfId={bookshelfId}
                   initialShelf={shelf}
                   initialPosition={position}
-                  bookshelves={bookshelves || []}
-                  onSuccess={() => {
-                    navigate('/');
+                  bookshelves={allBookshelves || []}
+                  onSuccess={(addedToBookshelfId) => {
+                    // Invalidate the specific bookshelf's books query
+                    queryClient.invalidateQueries({ queryKey: ['/api/books', { bookshelfId: addedToBookshelfId }] });
+                    // Also invalidate general book list if it's used elsewhere (e.g. dashboard recent books)
+                    queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+                    
+                    // 获取跳转来源
+                    const source = searchParams.get('source');
+                    
+                    // 如果有明确的来源标记，根据来源跳转
+                    if (source === 'family-bookshelf') {
+                      navigate('/family-bookshelf');
+                      return;
+                    } else if (source === 'my-bookshelf') {
+                      navigate('/my-bookshelf');
+                      return;
+                    }
+                    
+                    // 如果没有明确标记，尝试通过bookshelf类型判断
+                    const isFromFamilyBookshelf = familyBookshelves?.some(bs => bs.id === addedToBookshelfId);
+                    const isFromMyBookshelf = ownedBookshelves?.some(bs => bs.id === addedToBookshelfId);
+
+                    if (isFromFamilyBookshelf) {
+                      navigate('/family-bookshelf');
+                    } else if (isFromMyBookshelf) {
+                      navigate('/my-bookshelf');
+                    } else {
+                      navigate('/'); // 默认回到首页
+                    }
                   }}
                 />
               )}
@@ -115,9 +178,36 @@ export default function AddBookPage() {
                   initialBookshelfId={bookshelfId}
                   initialShelf={shelf}
                   initialPosition={position}
-                  bookshelves={bookshelves || []}
-                  onSuccess={() => {
-                    navigate('/');
+                  bookshelves={allBookshelves || []}
+                  onSuccess={(addedToBookshelfId) => {
+                    // Invalidate the specific bookshelf's books query
+                    queryClient.invalidateQueries({ queryKey: ['/api/books', { bookshelfId: addedToBookshelfId }] });
+                    // Also invalidate general book list if it's used elsewhere (e.g. dashboard recent books)
+                    queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+                    
+                    // 获取跳转来源
+                    const source = searchParams.get('source');
+                    
+                    // 如果有明确的来源标记，根据来源跳转
+                    if (source === 'family-bookshelf') {
+                      navigate('/family-bookshelf');
+                      return;
+                    } else if (source === 'my-bookshelf') {
+                      navigate('/my-bookshelf');
+                      return;
+                    }
+                    
+                    // 如果没有明确标记，尝试通过bookshelf类型判断
+                    const isFromFamilyBookshelf = familyBookshelves?.some(bs => bs.id === addedToBookshelfId);
+                    const isFromMyBookshelf = ownedBookshelves?.some(bs => bs.id === addedToBookshelfId);
+
+                    if (isFromFamilyBookshelf) {
+                      navigate('/family-bookshelf');
+                    } else if (isFromMyBookshelf) {
+                      navigate('/my-bookshelf');
+                    } else {
+                      navigate('/'); // 默认回到首页
+                    }
                   }}
                 />
               )}

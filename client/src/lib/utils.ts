@@ -40,3 +40,16 @@ export function formatRelativeTime(date: Date): string {
   // For older dates, use the formatted date
   return formatDate(date);
 }
+
+/**
+ * 获取本地base64编码的占位符图片，避免使用外部URL
+ */
+export function getBookCoverPlaceholder() {
+  // 简单的透明1x1像素GIF
+  const transparentPixel = "data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==";
+  
+  // 一个小的彩色方块图片作为书籍封面
+  const bookCoverPlaceholder = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNk+M9Qz0AEYBxVSF+FAAhKDveksOjmAAAAAElFTkSuQmCC";
+  
+  return bookCoverPlaceholder;
+}

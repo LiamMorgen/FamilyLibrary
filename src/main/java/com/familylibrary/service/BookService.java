@@ -1,14 +1,22 @@
 package com.familylibrary.service;
 
 import com.familylibrary.dto.BookDto;
-import com.familylibrary.dto.UserDto; // Required for BookDto.addedBy
-import com.familylibrary.model.Book; // Assuming Book entity exists
+import com.familylibrary.dto.CreateBookRequest;
+import com.familylibrary.dto.ShelfPositionDto;
+import com.familylibrary.dto.UserDto;
+import com.familylibrary.model.Book;
 import com.familylibrary.model.Bookshelf;
-import com.familylibrary.model.User; // Required for converting User to UserDto
-import com.familylibrary.repository.BookRepository; // Assuming BookRepository exists
+import com.familylibrary.model.User;
+import com.familylibrary.model.BookStatus;
+import com.familylibrary.repository.BookRepository;
+import com.familylibrary.repository.BookshelfRepository;
 import com.familylibrary.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,20 +28,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BookService {
 
-    private final BookRepository bookRepository; // Will be needed for actual implementation
-    private final UserRepository userRepository; // For fetching user details for addedBy field
+    private final BookRepository bookRepository;
+    private final UserRepository userRepository;
+    private final BookshelfRepository bookshelfRepository;
 
     @Transactional(readOnly = true)
     public List<BookDto> getAllBooks(Long bookshelfId, String query, Integer limit, String sort) {
-        // TODO: Implement actual logic to fetch books based on parameters
-        // For now, returning an empty list.
-        System.out.println("DEBUG: BookService.getAllBooks called with bookshelfId: " + bookshelfId + ", query: " + query + ", limit: " + limit + ", sort: " + sort + " - placeholder implementation. Returning empty list.");
-        
-        // Example of how you might fetch and convert if you had data:
-        // List<Book> books = bookRepository.findAll(); // Replace with actual query logic
-        // return books.stream().map(this::convertToDto).collect(Collectors.toList());
-
-        return Collections.emptyList();
+        if (bookshelfId != null) {
+            List<Book> books = bookRepository.findByBookshelfId(bookshelfId);
+            return books.stream().map(this::convertToDto).collect(Collectors.toList());
+        } else {
+            List<Book> allBooks = bookRepository.findAll();
+            return allBooks.stream().map(this::convertToDto).collect(Collectors.toList());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -43,10 +50,64 @@ public class BookService {
         return convertToDto(book);
     }
 
-    // TODO: Implement createBook, updateBook, deleteBook methods
+    @Transactional
+    public BookDto createBook(CreateBookRequest request) {
+        // Validate ISBN
+        if (request.getIsbn() == null || request.getIsbn().trim().isEmpty()) {
+            throw new IllegalArgumentException("ISBN cannot be blank.");
+        }
+        if (bookRepository.existsByIsbn(request.getIsbn())) {
+            throw new DataIntegrityViolationException("Book with ISBN " + request.getIsbn() + " already exists.");
+        }
 
-    // Helper method to convert Book entity to BookDto
-    // This needs to be implemented based on your Book entity structure
+        Bookshelf bookshelf = bookshelfRepository.findById(request.getBookshelfId())
+                .orElseThrow(() -> new EntityNotFoundException("Bookshelf not found with id: " + request.getBookshelfId()));
+
+        User currentUser = getCurrentUser();
+
+        Book book = new Book();
+        book.setTitle(request.getTitle());
+        book.setAuthor(request.getAuthor());
+        book.setIsbn(request.getIsbn());
+        book.setPublisher(request.getPublisher());
+        book.setPublicationDate(request.getPublicationDate());
+        book.setCategory(request.getGenre());
+        book.setCoverImage(request.getCoverImageUrl());
+        book.setDescription(request.getDescription());
+        book.setBookshelf(bookshelf);
+        book.setShelfNumber(request.getShelfNumber());
+        book.setPositionNumber(request.getPositionOnShelf());
+        book.setStatus(BookStatus.AVAILABLE);
+        book.setAddedBy(currentUser);
+
+        Book savedBook = bookRepository.save(book);
+        return convertToDto(savedBook);
+    }
+
+    private User getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal() == null) {
+            throw new IllegalStateException("User is not authenticated or authentication details are not available.");
+        }
+
+        String username;
+        Object principal = authentication.getPrincipal();
+
+        if (principal instanceof UserDetails) {
+            username = ((UserDetails) principal).getUsername();
+        } else if (principal instanceof String) {
+            username = (String) principal;
+             if ("anonymousUser".equals(username)) {
+                throw new IllegalStateException("Operation requires an authenticated user, but an anonymous user was found.");
+            }
+        } else {
+            throw new IllegalStateException("Principal is not of expected type (UserDetails or String): " + principal.getClass().getName());
+        }
+        
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("User not found with username: " + username));
+    }
+
     private BookDto convertToDto(Book book) {
         if (book == null) return null;
         BookDto dto = new BookDto();
@@ -55,6 +116,8 @@ public class BookService {
         dto.setAuthor(book.getAuthor());
         dto.setIsbn(book.getIsbn());
         dto.setGenre(book.getCategory());
+        dto.setPublisher(book.getPublisher());
+        dto.setPublicationDate(book.getPublicationDate());
         dto.setSummary(book.getDescription());
         dto.setCoverImageUrl(book.getCoverImage());
         dto.setStatus(book.getStatus() != null ? book.getStatus().name() : null);
@@ -65,9 +128,13 @@ public class BookService {
             dto.setBookshelfName(bookshelf.getName());
         }
         
+        if (book.getShelfNumber() != null) {
+            dto.setShelfPosition(new ShelfPositionDto(book.getShelfNumber(), book.getPositionNumber()));
+        } else {
+            dto.setShelfPosition(null);
+        }
+        
         dto.setAddedDate(book.getCreatedAt());
-        // dto.setTotalPages(book.getTotalPages()); // TotalPages field does not exist in Book entity - COMMENTED OUT
-        // dto.setLanguage(book.getLanguage()); // Language field does not exist in Book entity - COMMENTED OUT
 
         User addedByUser = book.getAddedBy();
         if (addedByUser != null) {
@@ -75,9 +142,9 @@ public class BookService {
             addedByDto.setId(addedByUser.getId());
             addedByDto.setUsername(addedByUser.getUsername());
             addedByDto.setDisplayName(addedByUser.getDisplayName());
-            // Fill other UserDto fields as needed, but NOT password
             dto.setAddedBy(addedByDto);
         }
+        
         return dto;
     }
 } 

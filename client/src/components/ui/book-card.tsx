@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { Book } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getBookCoverPlaceholder } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
 interface BookCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -15,9 +15,14 @@ export function BookCard({ book, className /*, ...props*/ }: BookCardProps) {
       <Link to={`/books/${book.id}`}>
         <div className="cursor-pointer">
           <img 
-            src={book.coverImage || 'https://via.placeholder.com/100x150?text=No+Cover'} 
+            src={book.coverImage || book.coverImageUrl || getBookCoverPlaceholder()} 
             className="w-20 h-28 object-cover rounded shadow-sm" 
             alt={book.title} 
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.src = getBookCoverPlaceholder();
+            }}
           />
         </div>
       </Link>

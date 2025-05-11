@@ -167,5 +167,20 @@
     "unknownBook": "Unknown Book",
     "noActivities": "No activities"
   },
-  "addBookshelf": "Add New Bookshelf"
+  "addBookshelf": "Add New Bookshelf",
+  "createFamilyDialog": {
+    "title": "Create New Family",
+    "description": "Create a new family to share bookshelves and books with members.",
+    "familyNameLabel": "Family Name",
+    "familyNamePlaceholder": "e.g., The Smiths",
+    "createButton": "Create Family",
+    "successTitle": "Family Created",
+    "successDescription": "Family \"{{familyName}}\" has been successfully created!",
+    "errorTitle": "Failed to Create Family",
+    "genericError": "An unknown error occurred while creating the family."
+  },
+  "common": {
+    "cancel": "Cancel",
+    "creating": "Creating..."
+  }
 }

@@ -34,7 +34,28 @@ public class FamilyService {
         }
         Family family = new Family();
         family.setName(request.getName());
-        Family savedFamily = familyRepository.save(family);
+
+        // Get current user
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String username;
+        if (principal instanceof UserDetails) {
+            username = ((UserDetails)principal).getUsername();
+        } else {
+            username = principal.toString();
+        }
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("Current user not found: " + username + " when trying to create family."));
+
+        // Add current user as a member
+        family.getMembers().add(currentUser);
+        // Also update the user's side of the relationship
+        currentUser.getFamilies().add(family);
+        // Note: JPA/Hibernate should handle the join table update due to the @ManyToMany relationship owned by User.
+        // However, explicitly saving the user after modification is a good practice to ensure changes are persisted.
+
+        Family savedFamily = familyRepository.save(family); // Save family first, which might generate ID
+        userRepository.save(currentUser); // Then save user with the new family association
+
         return convertToDto(savedFamily);
     }
 

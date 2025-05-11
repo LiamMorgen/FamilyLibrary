@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,7 +24,7 @@ interface BookFormProps {
   initialShelf?: number;
   initialPosition?: number;
   bookshelves: Bookshelf[];
-  onSuccess?: () => void;
+  onSuccess?: (bookshelfId: number) => void;
 }
 
 export function BookForm({
@@ -42,34 +42,53 @@ export function BookForm({
   const formSchema = z.object({
     title: z.string().min(1, { message: t('bookForm.titleRequired') }),
     author: z.string().min(1, { message: t('bookForm.authorRequired') }),
-    isbn: z.string().optional(),
+    isbn: z.string().default("0000000000000"),
     category: z.string().optional(),
     description: z.string().optional(),
     coverImage: z.string().optional(),
     bookshelfId: z.number().min(1, { message: t('bookForm.bookshelfRequired') }),
     shelfPosition: z.object({
-      shelf: z.number(),
-      position: z.number()
+      shelf: z.number().min(1, { message: t('bookForm.shelfRequiredError') }),
+      position: z.number().min(1, { message: t('bookForm.positionRequiredError') })
     })
   });
 
   // Initialize form with default values
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
       title: "",
       author: "",
-      isbn: "",
+      isbn: "0000000000000",
       category: "",
       description: "",
       coverImage: "",
-      bookshelfId: initialBookshelfId || 0,
+      bookshelfId: initialBookshelfId || undefined,
       shelfPosition: {
-        shelf: initialShelf,
-        position: initialPosition
+        shelf: initialShelf + 1,
+        position: initialPosition + 1
       }
     }
   });
+
+  const selectedBookshelfId = form.watch("bookshelfId");
+  const selectedBookshelf = bookshelves.find(bs => bs.id === selectedBookshelfId);
+  const numShelves = selectedBookshelf?.numShelves ?? 0;
+  const positionsPerShelf = 10; // Using a fixed default value for now
+
+  // Reset shelf/position if bookshelf changes and current selection is invalid
+  useEffect(() => {
+    if (selectedBookshelf) {
+      const currentShelf = form.getValues("shelfPosition.shelf");
+      const currentPosition = form.getValues("shelfPosition.position");
+      if (currentShelf > (selectedBookshelf.numShelves ?? 0)) {
+        form.setValue("shelfPosition.shelf", 1);
+      }
+      if (currentPosition > positionsPerShelf) { // Using the fixed value from above
+        form.setValue("shelfPosition.position", 1);
+      }
+    }
+  }, [selectedBookshelfId, form, selectedBookshelf, numShelves, positionsPerShelf]); // Added numShelves and positionsPerShelf to dependency array
 
   // Available book categories
   const bookCategories = [
@@ -91,20 +110,36 @@ export function BookForm({
     try {
       setIsSubmitting(true);
       
-      // Add a default cover if none is provided
-      if (!data.coverImage) {
-        data.coverImage = sampleCoverImages[Math.floor(Math.random() * sampleCoverImages.length)];
+      const processedData = {
+        ...data,
+        isbn: data.isbn || "0000000000000",
+      };
+
+      let coverImageToUse = processedData.coverImage;
+      if (!coverImageToUse && sampleCoverImages.length > 0) {
+        coverImageToUse = sampleCoverImages[Math.floor(Math.random() * sampleCoverImages.length)];
       }
       
-      // Set up the book data
-      const bookData = {
-        ...data,
-        addedById: 1, // Assuming current user ID is 1
-        status: "available"
+      // Construct payload matching CreateBookRequest DTO
+      // CreateBookRequest: title, author, isbn, publisher, publicationDate, genre, coverImageUrl, description, bookshelfId, shelfNumber, positionOnShelf
+      const apiPayload = {
+        title: processedData.title,
+        author: processedData.author,
+        isbn: processedData.isbn,
+        publisher: undefined,
+        publicationDate: undefined,
+        genre: processedData.category,
+        coverImageUrl: coverImageToUse,
+        coverImage: coverImageToUse,
+        summary: processedData.description,
+        description: processedData.description,
+        bookshelfId: processedData.bookshelfId,
+        shelfNumber: processedData.shelfPosition.shelf,
+        positionOnShelf: processedData.shelfPosition.position,
       };
       
       // Send the data to the API
-      await apiRequest("POST", "/api/books", bookData);
+      await apiRequest("POST", "/api/books", apiPayload);
       
       // Handle success
       toast({
@@ -114,16 +149,19 @@ export function BookForm({
       
       // Invalidate books query to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/bookshelves', apiPayload.bookshelfId, 'books'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/books', { bookshelfId: apiPayload.bookshelfId }] });
       
       // Call onSuccess callback
       if (onSuccess) {
-        onSuccess();
+        onSuccess(apiPayload.bookshelfId as number);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add book:", error);
+      const errorMessage = error?.response?.data?.message || t('bookForm.errorAdding');
       toast({
         title: t('bookForm.error'),
-        description: t('bookForm.errorAdding'),
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -133,11 +171,11 @@ export function BookForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="title"
               render={({ field }) => (
                 <FormItem>
@@ -151,7 +189,7 @@ export function BookForm({
             />
             
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="author"
               render={({ field }) => (
                 <FormItem>
@@ -165,13 +203,13 @@ export function BookForm({
             />
             
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="isbn"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('bookForm.isbn')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="9787XXXXXXXXX" {...field} />
+                    <Input placeholder="9787XXXXXXXXX" {...field} value={field.value ?? ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -179,7 +217,7 @@ export function BookForm({
             />
             
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="category"
               render={({ field }) => (
                 <FormItem>
@@ -205,20 +243,20 @@ export function BookForm({
             />
             
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="coverImage"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('bookForm.coverImage')}</FormLabel>
                   <FormControl>
-                    <Input placeholder={t('bookForm.coverImagePlaceholder')} {...field} />
+                    <Input placeholder={t('bookForm.coverImagePlaceholder')} {...field} value={field.value ?? ''} />
                   </FormControl>
                   <div className="mt-2 grid grid-cols-5 gap-2">
                     {sampleCoverImages.map((image, index) => (
                       <div 
                         key={index}
                         className={`cursor-pointer border-2 rounded p-1 ${field.value === image ? 'border-primary' : 'border-transparent hover:border-gray-300'}`}
-                        onClick={() => form.setValue('coverImage', image)}
+                        onClick={() => form.setValue('coverImage', image, { shouldValidate: true })}
                       >
                         <img 
                           src={image} 
@@ -236,7 +274,7 @@ export function BookForm({
           
           <div className="space-y-4">
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="description"
               render={({ field }) => (
                 <FormItem>
@@ -246,6 +284,7 @@ export function BookForm({
                       placeholder={t('bookForm.descriptionPlaceholder')} 
                       className="h-32"
                       {...field} 
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />
@@ -254,14 +293,15 @@ export function BookForm({
             />
             
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="bookshelfId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('bookForm.bookshelf')}</FormLabel>
                   <Select 
                     onValueChange={(value) => field.onChange(parseInt(value))}
-                    defaultValue={field.value.toString()}
+                    defaultValue={field.value?.toString()}
+                    value={field.value?.toString() || ""}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -269,9 +309,9 @@ export function BookForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {bookshelves.map(bookshelf => (
-                        <SelectItem key={bookshelf.id} value={bookshelf.id.toString()}>
-                          {bookshelf.name}
+                      {bookshelves.map(shelf => (
+                        <SelectItem key={shelf.id} value={shelf.id.toString()}>
+                          {shelf.name} ({shelf.isPrivate ? t('bookshelves.personal') : t('bookshelves.family')})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -281,81 +321,76 @@ export function BookForm({
               )}
             />
             
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="shelfPosition.shelf"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('bookForm.shelf')}</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      defaultValue={field.value.toString()}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('bookForm.selectShelf')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {Array.from({ length: 3 }).map((_, i) => (
-                          <SelectItem key={i} value={i.toString()}>
-                            {t('bookForm.shelfNumber', { number: i + 1 })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="shelfPosition.position"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('bookForm.position')}</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      defaultValue={field.value.toString()}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('bookForm.selectPosition')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <SelectItem key={i} value={i.toString()}>
-                            {t('bookForm.positionNumber', { number: i + 1 })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
-            <div className="pt-4">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <i className="fas fa-spinner fa-spin mr-2"></i>
-                    {t('bookForm.adding')}
-                  </>
-                ) : (
-                  <>
-                    <i className="fas fa-plus mr-2"></i>
-                    {t('bookForm.addBook')}
-                  </>
-                )}
-              </Button>
-            </div>
+            {selectedBookshelf && (
+              <>
+                <FormField
+                  control={form.control as any}
+                  name="shelfPosition.shelf"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('bookForm.shelfNumber')}</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(parseInt(value))}
+                        value={field.value?.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('bookForm.selectShelf')} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Array.from({ length: numShelves }, (_, i) => (
+                            <SelectItem key={i + 1} value={(i + 1).toString()}> 
+                              {t('bookForm.shelfLabel', { number: i + 1 })} 
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control as any}
+                  name="shelfPosition.position"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('bookForm.positionOnShelf')}</FormLabel>
+                      <Select
+                        onValueChange={(value) => field.onChange(parseInt(value))}
+                        value={field.value?.toString()}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('bookForm.selectPosition')} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Array.from({ length: positionsPerShelf }, (_, i) => (
+                            <SelectItem key={i + 1} value={(i + 1).toString()}>
+                              {t('bookForm.positionLabel', { number: i + 1 })}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </div>
         </div>
+        
+        <Button type="submit" disabled={isSubmitting} className="w-full md:w-auto">
+          {isSubmitting ? (
+            <i className="fas fa-spinner fa-spin mr-2"></i>
+          ) : (
+            <i className="fas fa-plus-circle mr-2"></i> 
+          )}
+          {t('bookForm.addBookButton')}
+        </Button>
       </form>
     </Form>
   );

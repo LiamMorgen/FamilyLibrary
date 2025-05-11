@@ -48,10 +48,16 @@ export interface Book {
   isbn?: string;
   category?: string;
   coverImage?: string;
+  coverImageUrl?: string;
   description?: string;
   addedById: number;
+  addedBy?: {
+    id: number;
+    username: string;
+    displayName?: string;
+  };
   bookshelfId: number;
-  shelfPosition: ShelfPosition;
+  shelfPosition?: ShelfPosition | null;
   status: string; // "available", "borrowed", "reading"
   addedDate: string | Date;
 }

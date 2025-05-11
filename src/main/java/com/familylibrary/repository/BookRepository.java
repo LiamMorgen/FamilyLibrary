@@ -24,10 +24,14 @@ public interface BookRepository extends JpaRepository<Book, Long> {
 
     List<Book> findByBookshelf(Bookshelf bookshelf);
 
+    List<Book> findByBookshelfId(Long bookshelfId);
+
     List<Book> findByAddedBy(User user);
 
     // Example of a more complex query to find books by title in a specific user's bookshelves
     @Query("SELECT b FROM Book b WHERE b.bookshelf.owner = :user AND lower(b.title) LIKE lower(concat('%', :titleKeyword, '%'))")
     List<Book> findByUserAndTitleContainingIgnoreCase(@Param("user") User user, @Param("titleKeyword") String titleKeyword);
+
+    boolean existsByIsbn(String isbn);
 
 } 

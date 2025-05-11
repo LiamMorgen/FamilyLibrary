@@ -24,7 +24,14 @@
     "noMembersFound": "暂无家庭成员",
     "addNewMember": "添加新家庭成员",
     "inviteFamily": "邀请家人加入您的家庭图书馆",
-    "inviteMember": "邀请成员"
+    "inviteMember": "邀请成员",
+    "loadingFamily": "加载家庭中...",
+    "yourFamilyName": "{name}",
+    "noFamily": "您尚未加入家庭",
+    "createFamily": "创建家庭",
+    "createFamilyDescription": "创建一个家庭，邀请家人一起管理图书！",
+    "createFamilyButton": "创建家庭",
+    "familyMembersCount": "{{count}}位成员"
   },
   "mobileNav": {
     "home": "首页",
@@ -34,21 +41,28 @@
     "profile": "我的"
   },
   "dashboard": {
-    "welcome": "欢迎回来, {{user}}",
-    "user": "用户",
-    "today": "今天是 {{date}}",
-    "addNewBook": "添加新书",
+    "title": "首页",
+    "welcome": "欢迎回来，{{name}}",
+    "todayDate": "今天是 {{date}}",
     "totalBooks": "总藏书",
-    "reading": "正在阅读",
-    "borrowed": "借出",
+    "reading": "阅读中",
+    "borrowed": "已借出",
     "pendingReturn": "待归还",
-    "familyBookshelf": "家庭书架",
-    "viewAll": "查看全部",
-    "noBookshelfFound": "未找到书架",
-    "createBookshelf": "创建书架",
+    "bookshelves": "我的书架",
+    "familyBookshelves": "家庭书架",
+    "personalBookshelves": "个人书架",
     "recentlyAdded": "最近添加",
-    "noRecentBooks": "没有最近添加的书籍",
-    "recentActivity": "最近活动"
+    "recentActivities": "最近活动",
+    "viewAll": "查看全部",
+    "addBook": "添加书籍",
+    "addFirstBook": "添加第一本书",
+    "noFamilyBookshelves": "您当前没有家庭书架",
+    "noPersonalBookshelves": "您当前没有个人书架",
+    "createFamilyBookshelf": "创建家庭书架",
+    "createPersonalBookshelf": "创建个人书架",
+    "noRecentBooks": "最近没有添加书籍",
+    "noActivities": "没有最近活动",
+    "noBooks": "书架暂无书籍"
   },
   "myBookshelf": {
     "title": "我的书架",
@@ -56,15 +70,27 @@
     "noBookshelfFound": "您还没有个人书架",
     "createBookshelf": "创建书架",
     "categories": "书籍分类",
-    "books": "本书籍"
+    "books": "本书籍",
+    "noBookshelf": "暂无书架",
+    "noBookshelfDescription": "您当前没有个人书架。创建一个书架，开始管理您的图书！",
+    "createFirstBookshelf": "创建第一个书架",
+    "loadError": "加载书架失败",
+    "loadBooksError": "加载书籍失败",
+    "selectTabToView": "选择\"{{name}}\"查看书籍"
   },
   "familyBookshelf": {
     "title": "家庭书架",
     "addBook": "添加书籍",
-    "noBookshelfFound": "还没有家庭书架",
-    "createBookshelf": "创建书架",
+    "noBookshelfFound": "未找到家庭书架",
+    "createButton": "创建书架",
     "familyMembers": "家庭成员",
-    "books": "本书籍"
+    "books": "本书籍",
+    "noBookshelves": "没有家庭书架",
+    "noBookshelvesDescription": "您目前没有家庭书架。创建一个家庭书架，与家人分享阅读体验！",
+    "createFirstBookshelf": "创建第一个家庭书架",
+    "selectTabToView": "选择 \"{{name}}\" 查看书籍",
+    "loadError": "加载家庭书架失败",
+    "loadBooksError": "加载书籍失败"
   },
   "borrowingRecords": {
     "title": "借阅记录",
@@ -139,23 +165,47 @@
     "bookshelf": "书架",
     "bookshelfRequired": "请选择书架",
     "selectBookshelf": "选择书架",
-    "shelf": "层数",
+    "shelfNumber": "层数",
+    "shelfLabel": "第 {{number}} 层",
     "selectShelf": "选择层数",
-    "shelfNumber": "第 {{number}} 层",
-    "position": "位置",
+    "positionOnShelf": "位置",
+    "positionLabel": "位置 {{number}}",
     "selectPosition": "选择位置",
-    "positionNumber": "位置 {{number}}",
-    "addBook": "添加书籍",
+    "addBookButton": "添加书籍",
     "adding": "添加中...",
-    "success": "添加成功",
-    "bookAdded": "书籍已成功添加",
-    "error": "添加失败",
-    "errorAdding": "添加书籍时发生错误"
+    "success": "成功",
+    "bookAdded": "书籍已成功添加！",
+    "error": "错误",
+    "errorAdding": "添加书籍时发生错误。",
+    "shelfRequiredError": "请选择书籍所在的层数。",
+    "positionRequiredError": "请选择书籍在书架上的位置。"
   },
   "bookStatus": {
     "available": "可借阅",
     "borrowed": "已借出",
     "reading": "正在阅读"
+  },
+  "bookDetail": {
+    "title": "书籍详情",
+    "notFound": "未找到书籍信息",
+    "status": "状态",
+    "location": "位置",
+    "shelf": "层",
+    "position": "位置",
+    "addedOn": "添加日期",
+    "summary": "简介",
+    "isbn": "ISBN",
+    "publisher": "出版社",
+    "publicationDate": "出版日期",
+    "pages": "页数",
+    "language": "语言",
+    "edit": "编辑",
+    "delete": "删除",
+    "borrow": "借阅",
+    "return": "归还",
+    "markAsReading": "标记为阅读中",
+    "markAsFinished": "标记为已读",
+    "addRating": "添加评分"
   },
   "activityFeed": {
     "startedReading": "{{user}} 开始阅读 《{{book}}》",
@@ -169,5 +219,29 @@
     "unknownBook": "未知书籍",
     "noActivities": "暂无活动"
   },
-  "addBookshelf": "添加新书架"
+  "addBookshelf": "添加新书架",
+  "bookshelves": {
+    "personal": "个人",
+    "family": "家庭",
+    "noBooks": "该书架暂无书籍",
+    "emptyShelf": "空书架",
+    "public": "公开",
+    "private": "私有"
+  },
+  "createFamilyDialog": {
+    "title": "创建新家庭",
+    "description": "创建一个新的家庭，邀请成员共享书架和书籍。",
+    "familyNameLabel": "家庭名称",
+    "familyNamePlaceholder": "例如：[您的姓氏]之家",
+    "createButton": "创建家庭",
+    "successTitle": "家庭已创建",
+    "successDescription": "家庭 \"{{familyName}}\" 已成功创建！",
+    "errorTitle": "创建家庭失败",
+    "genericError": "创建家庭时发生未知错误。"
+  },
+  "common": {
+    "cancel": "取消",
+    "creating": "创建中...",
+    "back": "返回"
+  }
 }

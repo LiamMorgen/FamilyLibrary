@@ -17,7 +17,9 @@ async function fetchFamilyBookshelves(): Promise<BookshelfType[]> {
   if (!response.ok) {
     throw new Error('Network response was not ok for fetching family bookshelves');
   }
-  return response.json();
+  const bookshelves = await response.json();
+  console.log("Fetched family bookshelves:", bookshelves);
+  return bookshelves;
 }
 
 // Function to fetch books for a specific bookshelf (can be reused from my-bookshelf or defined here)
@@ -27,7 +29,12 @@ async function fetchBooksForBookshelf(bookshelfId: number | undefined | null): P
   if (!response.ok) {
     throw new Error('Network response was not ok for fetching books');
   }
-  return response.json();
+  const booksData: any[] = await response.json();
+  return booksData.map(book => ({
+    ...book,
+    coverImage: book.coverImage || book.coverImageUrl,
+    coverImageUrl: book.coverImageUrl || book.coverImage
+  }));
 }
 
 export default function FamilyBookshelf() {
@@ -43,9 +50,20 @@ export default function FamilyBookshelf() {
     queryFn: fetchFamilyBookshelves,
   });
 
+  // 日志输出获取到的书架信息
+  useEffect(() => {
+    if (familyBookshelves) {
+      console.log("家庭书架数据已加载:", familyBookshelves.length, "个书架");
+      familyBookshelves.forEach(shelf => {
+        console.log(`书架ID: ${shelf.id}, 名称: ${shelf.name}, 家庭ID: ${shelf.familyId}`);
+      });
+    }
+  }, [familyBookshelves]);
+
   // Set the first bookshelf as active by default if not already set
   useEffect(() => {
     if (familyBookshelves && familyBookshelves.length > 0 && activeTabBookshelfId === null) {
+      console.log("设置默认激活的书架:", familyBookshelves[0].id);
       setActiveTabBookshelfId(familyBookshelves[0].id);
     }
   }, [familyBookshelves, activeTabBookshelfId]);
@@ -74,7 +92,7 @@ export default function FamilyBookshelf() {
 
   const handleAddBookToFamilyShelf = (shelfPosition: ShelfPosition) => {
     if (activeBookshelf) {
-      navigate(`/add-book?bookshelfId=${activeBookshelf.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}`);
+      navigate(`/add-book?bookshelfId=${activeBookshelf.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}&source=family-bookshelf`);
     } else {
       console.warn("No active family bookshelf to add a book to.");
       // Potentially show a message or guide user
@@ -104,8 +122,12 @@ export default function FamilyBookshelf() {
             {t('familyBookshelf.createButton')}
           </Button>
         </div>
-        <div className="text-center py-10">
-          <p className="mb-4">{t('familyBookshelf.noBookshelves')}</p>
+        <div className="text-center py-10 bg-white p-8 rounded-lg shadow-sm border border-gray-100">
+          <h3 className="text-xl font-bold mb-4">{t('familyBookshelf.noBookshelves')}</h3>
+          <p className="mb-6 text-gray-600">{t('familyBookshelf.noBookshelvesDescription', { defaultValue: '您目前没有家庭书架。创建一个家庭书架，与家人分享阅读体验！' })}</p>
+          <Button onClick={handleCreateBookshelf} size="lg">
+            <i className="fas fa-plus mr-2"></i> {t('familyBookshelf.createFirstBookshelf', { defaultValue: '创建第一个家庭书架' })}
+          </Button>
         </div>
         <CreateBookshelfDialog
           isOpen={isCreateDialogOpen}
@@ -142,18 +164,18 @@ export default function FamilyBookshelf() {
               isLoadingBooks ? (
                 <Skeleton className="h-[300px] w-full" />
               ) : booksError ? (
-                 <div className="text-red-500">{t('familyBookshelf.loadBooksError')}: {booksError.message}</div>
+                <div className="text-red-500">{t('familyBookshelf.loadBooksError')}: {booksError.message}</div>
               ) : (
-                <Bookshelf
-                  numShelves={activeBookshelf.numShelves || 1}
-                  books={booksForActiveBookshelf || []}
-                  onAddBook={handleAddBookToFamilyShelf}
-                  // onAddShelf might be relevant if family members can extend shelves
-                />
+                <>
+                  <h2 className="text-xl font-semibold mb-4">{activeBookshelf.name}</h2>
+                  <Bookshelf
+                    numShelves={activeBookshelf.numShelves || 1}
+                    books={booksForActiveBookshelf || []}
+                    onAddBook={handleAddBookToFamilyShelf}
+                  />
+                </>
               )
             ) : (
-              // This content is for non-active tabs, can be a placeholder or lighter content if needed
-              // Or simply rely on the active tab rendering the Bookshelf component
               <div>{t('familyBookshelf.selectTabToView', { name: shelf.name })}</div>
             )}
           </TabsContent>
@@ -164,7 +186,7 @@ export default function FamilyBookshelf() {
         isOpen={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         context="family-bookshelf"
-        defaultFamilyId={activeBookshelf?.familyId} // Pass active family ID, or let dialog fetch user's families
+        // defaultFamilyId can be passed if known, or determined in dialog based on user's families
         onSuccess={handleBookshelfCreated}
       />
     </div>

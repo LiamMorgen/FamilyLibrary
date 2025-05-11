@@ -12,6 +12,7 @@ import FamilyBookshelf from "@/pages/family-bookshelf";
 import BorrowingRecords from "@/pages/borrowing-records";
 import ReadingStats from "@/pages/reading-stats";
 import AddBookPage from "@/pages/add-book";
+import BookDetailPage from "@/pages/book-detail";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import Header from "@/components/layout/header";
@@ -46,6 +47,7 @@ function AppLayout() {
             <Route path="/borrowing-records" element={<ProtectedRoute><BorrowingRecords /></ProtectedRoute>} />
             <Route path="/reading-stats" element={<ProtectedRoute><ReadingStats /></ProtectedRoute>} />
             <Route path="/add-book" element={<ProtectedRoute><AddBookPage /></ProtectedRoute>} />
+            <Route path="/books/:bookId" element={<ProtectedRoute><BookDetailPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="*" element={<NotFound />} />

@@ -2,6 +2,7 @@ package com.familylibrary.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -28,6 +29,12 @@ public class Book {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "publisher")
+    private String publisher;
+
+    @Column(name = "publication_date")
+    private LocalDate publicationDate;
 
     @ManyToOne
     @JoinColumn(name = "bookshelf_id", nullable = false)
@@ -56,6 +63,9 @@ public class Book {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
+        if (status == null) {
+            status = BookStatus.AVAILABLE;
+        }
     }
 
     @PreUpdate
