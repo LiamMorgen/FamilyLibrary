@@ -34,6 +34,7 @@ export interface Bookshelf {
   createdAt: string;
   updatedAt: string;
   books?: Book[];
+  shelfNames?: Record<string, string>;
 }
 
 export interface ShelfPosition {

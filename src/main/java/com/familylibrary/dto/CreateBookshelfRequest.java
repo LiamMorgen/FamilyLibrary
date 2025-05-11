@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import java.util.Map;
 
 @Data
 public class CreateBookshelfRequest {
@@ -21,4 +22,8 @@ public class CreateBookshelfRequest {
     private Integer numShelves = 3; // Default from schema
 
     private Boolean isPrivate = false; // Default from schema
+
+    // Shelf names: Key is 1-based shelf index, Value is the name.
+    // Optional: If not provided, service might generate default names.
+    private Map<Integer, String> shelfNames;
 } 

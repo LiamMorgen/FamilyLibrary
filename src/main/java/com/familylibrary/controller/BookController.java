@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.List;
 
@@ -30,8 +31,18 @@ public class BookController {
             @RequestParam(required = false) Integer limit,
             @RequestParam(required = false) String sort // e.g., "addedDate_desc"
     ) {
-        List<BookDto> books = bookService.getAllBooks(bookshelfId, query, limit, sort);
+        if (query != null && !query.trim().isEmpty()) {
+            List<BookDto> books = bookService.searchBooks(query);
+            return ResponseEntity.ok(books);
+        }
+        List<BookDto> books = bookService.getAllBooks(bookshelfId, null, limit, sort);
         return ResponseEntity.ok(books); 
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<BookDto> getBookById(@PathVariable Long id) {
+        BookDto book = bookService.getBookById(id);
+        return ResponseEntity.ok(book);
     }
 
     @PostMapping
@@ -40,7 +51,6 @@ public class BookController {
         return new ResponseEntity<>(createdBook, HttpStatus.CREATED);
     }
 
-    // TODO: Add GET /api/books/{id} to get a specific book
     // TODO: Add PUT /api/books/{id} to update a book
     // TODO: Add DELETE /api/books/{id} to delete a book
 } 

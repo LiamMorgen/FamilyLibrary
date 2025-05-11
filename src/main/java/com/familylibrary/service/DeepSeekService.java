@@ -80,8 +80,8 @@ public class DeepSeekService {
                                 .collect(Collectors.joining("\n"));
 
         List<DeepSeekMessageDto> messages = new ArrayList<>();
-        messages.add(new DeepSeekMessageDto("system", "你是一位资深、友好、温暖的图书推荐和阅读分析专家。用户会提供他们的书单，请你简要地概括用户的阅读品味、个人性格，语言尽量高级凝练，富有内涵和文采，并据此推荐2-3本用户可能会喜欢的书籍。请在回复开始时先对用户的阅读偏好进行一段总结性分析，然后以列表形式推荐书籍，每本书籍包括书名、作者和简短的推荐理由。推荐的书籍不要与用户书单中的书籍重复。"));
-        messages.add(new DeepSeekMessageDto("user", "我的书单如下：\n" + bookListString + "\n\n请根据以上书单进行分析和推荐。"));
+        messages.add(new DeepSeekMessageDto("system", "你是一位资深、友好、温暖的图书推荐和阅读分析专家。我会提供他们书架上的书籍，请你简要地概括用户的阅读品味、个人性格，并据此推荐2-3本我可能会喜欢的书籍。请在回复开始时先对用户的阅读品味、个人性格进行一段总结性分析，语言尽量高级、简明、凝练，富有内涵和文采，尽量是“金句”，然后以列表形式推荐书籍，每本书籍包括书名、作者和简短的推荐理由，不要显式地写出“推荐理由：”，直接说就行，篇幅有限。推荐的书籍不要与我书单中的书籍重复。"));
+        messages.add(new DeepSeekMessageDto("user", "我书架上的书如下：\n" + bookListString + "\n\n请根据以上书籍进行分析和推荐。"));
 
         DeepSeekChatResponseDto deepSeekResponse = callDeepSeekAPI(messages);
 

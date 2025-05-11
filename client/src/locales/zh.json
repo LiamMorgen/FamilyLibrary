@@ -83,7 +83,15 @@
     "createFirstBookshelf": "创建第一个书架",
     "loadError": "加载书架失败",
     "loadBooksError": "加载书籍失败",
-    "selectTabToView": "选择\"{{name}}\"查看书籍"
+    "selectTabToView": "选择\"{{name}}\"查看书籍",
+    "deleteConfirmTitle": "确认删除书架",
+    "deleteConfirmDesc": "您确定要删除书架 \"{{name}}\" 吗？此书架下的所有层和书籍信息（如果书架非空且后端允许）也可能被处理或删除。",
+    "deleteWarning": "此操作无法撤销。",
+    "deleteSuccessTitle": "删除成功",
+    "deleteSuccessDesc": "书架 \"{{name}}\" 已被删除。",
+    "deleteErrorTitle": "删除失败",
+    "deleteErrorDesc": "无法删除书架，可能因为它不为空或发生其他错误。",
+    "deleting": "删除中..."
   },
   "familyBookshelf": {
     "title": "家庭书架",
@@ -245,6 +253,10 @@
     "public": "公开",
     "private": "私有"
   },
+  "bookshelf": {
+    "defaultShelfName": "第 {{number}} 层",
+    "addShelfButton": "添加新层"
+  },
   "createFamilyDialog": {
     "title": "创建新家庭",
     "description": "创建一个新的家庭，邀请成员共享书架和书籍。",
@@ -259,6 +271,12 @@
   "common": {
     "cancel": "取消",
     "creating": "创建中...",
-    "back": "返回"
+    "back": "返回",
+    "delete": "删除"
+  },
+  "searchResults": {
+    "title": "搜索结果",
+    "error": "加载搜索结果时出错，请稍后再试。",
+    "noResults": "未找到与 \"{{searchTerm}}\" 相关的书籍。请尝试其他关键词。"
   }
 }

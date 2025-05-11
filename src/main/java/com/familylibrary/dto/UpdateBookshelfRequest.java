@@ -3,6 +3,7 @@ package com.familylibrary.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import java.util.Map;
 
 @Data
 public class UpdateBookshelfRequest {
@@ -14,6 +15,10 @@ public class UpdateBookshelfRequest {
     private Integer numShelves; // Optional
 
     private Boolean isPrivate; // Optional
+
+    // Optional: Allows updating shelf names. 
+    // If numShelves is also changed, client should send a complete map for the new number of shelves.
+    private Map<Integer, String> shelfNames;
 
     // ownerId and familyId are typically not updatable via this request
 } 

@@ -10,22 +10,32 @@ import com.familylibrary.model.User;
 import com.familylibrary.repository.BookshelfRepository;
 import com.familylibrary.repository.FamilyRepository;
 import com.familylibrary.repository.UserRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class BookshelfService {
 
+    private static final Logger logger = LoggerFactory.getLogger(BookshelfService.class);
     private final BookshelfRepository bookshelfRepository;
     private final UserRepository userRepository;
     private final FamilyRepository familyRepository;
+    private final ObjectMapper objectMapper; // For JSON conversion
 
     @Transactional
     public BookshelfDto createBookshelf(CreateBookshelfRequest request) {
@@ -54,13 +64,24 @@ public class BookshelfService {
         bookshelf.setName(request.getName());
         bookshelf.setOwner(owner);
         bookshelf.setFamily(family);
-        if (request.getNumShelves() != null) {
+        if (request.getNumShelves() != null && request.getNumShelves() > 0) {
             bookshelf.setNumShelves(request.getNumShelves());
+        } else {
+            bookshelf.setNumShelves(1); // Default to 1 if not specified or invalid
         }
         if (request.getIsPrivate() != null) {
             bookshelf.setPrivate(request.getIsPrivate());
         }
-        // Defaults for numShelves and isPrivate are set in the entity itself
+        // Set shelf names
+        if (request.getShelfNames() != null && !request.getShelfNames().isEmpty()) {
+            try {
+                bookshelf.setShelfNamesJson(objectMapper.writeValueAsString(request.getShelfNames()));
+            } catch (JsonProcessingException e) {
+                logger.error("Error serializing shelf names to JSON for bookshelf: " + request.getName(), e);
+                // Decide on handling: throw error, or proceed without shelf names, or with defaults
+                // For now, we'll log and proceed, which means shelfNamesJson might be null
+            }
+        }
 
         Bookshelf savedBookshelf = bookshelfRepository.save(bookshelf);
         return convertToDto(savedBookshelf);
@@ -96,17 +117,25 @@ public class BookshelfService {
     public BookshelfDto updateBookshelf(Long id, UpdateBookshelfRequest request) {
         Bookshelf bookshelf = bookshelfRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Bookshelf not found with id: " + id));
-
-        // Add authorization check here: e.g., only owner can update
+        // TODO: Authorization check - only owner or family admin should update
 
         if (request.getName() != null && !request.getName().isBlank()) {
             bookshelf.setName(request.getName());
         }
-        if (request.getNumShelves() != null) {
+        if (request.getNumShelves() != null && request.getNumShelves() > 0) {
+            // TODO: Handle changing numShelves - what happens to existing shelf names/books on removed shelves?
+            // For simplicity now, we just update the number. More complex logic might be needed.
             bookshelf.setNumShelves(request.getNumShelves());
         }
         if (request.getIsPrivate() != null) {
             bookshelf.setPrivate(request.getIsPrivate());
+        }
+        if (request.getShelfNames() != null) { // Allow updating shelf names
+            try {
+                bookshelf.setShelfNamesJson(objectMapper.writeValueAsString(request.getShelfNames()));
+            } catch (JsonProcessingException e) {
+                logger.error("Error serializing shelf names to JSON for bookshelf ID: " + id, e);
+            }
         }
 
         Bookshelf updatedBookshelf = bookshelfRepository.save(bookshelf);
@@ -117,14 +146,13 @@ public class BookshelfService {
     public void deleteBookshelf(Long id) {
         Bookshelf bookshelf = bookshelfRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Bookshelf not found with id: " + id));
-        
-        // Add authorization check here: e.g., only owner can delete
-        
-        // Business rule: cannot delete bookshelf if it contains books
+        // TODO: Authorization check
+
         if (!bookshelf.getBooks().isEmpty()) {
-            throw new IllegalStateException("Cannot delete bookshelf with id " + id + " as it still contains books.");
+            throw new IllegalStateException("Cannot delete bookshelf: " + bookshelf.getName() + " (ID: " + id + ") as it still contains books. Please remove or reassign books first.");
         }
-        bookshelfRepository.deleteById(id);
+        bookshelfRepository.delete(bookshelf); // Use delete(entity) for potential cascading if set up, or deleteById(id)
+        logger.info("Successfully deleted bookshelf ID: {}", id);
     }
 
     private BookshelfDto convertToDto(Bookshelf bookshelf) {
@@ -150,6 +178,20 @@ public class BookshelfService {
 
         dto.setNumShelves(bookshelf.getNumShelves());
         dto.setPrivate(bookshelf.isPrivate());
+        
+        // Deserialize shelfNamesJson
+        if (bookshelf.getShelfNamesJson() != null && !bookshelf.getShelfNamesJson().isEmpty()) {
+            try {
+                Map<Integer, String> shelfNamesMap = objectMapper.readValue(bookshelf.getShelfNamesJson(), new TypeReference<Map<Integer, String>>() {});
+                dto.setShelfNames(shelfNamesMap);
+            } catch (IOException e) {
+                logger.error("Error deserializing shelf_names_json for bookshelf ID: " + bookshelf.getId(), e);
+                dto.setShelfNames(Collections.emptyMap()); // Or handle error appropriately
+            }
+        } else {
+            dto.setShelfNames(Collections.emptyMap());
+        }
+
         dto.setBookIds(bookshelf.getBooks().stream().map(Book::getId).collect(Collectors.toList()));
         dto.setCreatedAt(bookshelf.getCreatedAt());
         dto.setUpdatedAt(bookshelf.getUpdatedAt());

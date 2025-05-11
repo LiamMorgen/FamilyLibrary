@@ -1,8 +1,8 @@
 import { useEffect, useState as useReactState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -17,31 +17,27 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // For family selection
-import { useAuth } from '@/contexts/AuthContext'; // Removed unused CurrentUser type import
-import type { FamilySimpleDto, Family } from '@/lib/types'; // User type from lib is now handled by CurrentUser from AuthContext
-import { apiRequest, queryClient } from '@/lib/queryClient'; // Import apiRequest
-import { CreateFamilyDialog } from '@/components/dialogs/CreateFamilyDialog'; // Import CreateFamilyDialog
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import type { FamilySimpleDto, Family, Bookshelf } from '@/lib/types';
+import { apiRequest } from '@/lib/queryClient';
+import { CreateFamilyDialog } from '@/components/dialogs/CreateFamilyDialog';
+import { useToast } from "@/hooks/use-toast";
 
-// Define Zod schema for form validation
+const defaultNumShelvesConst = 3;
+
 const bookshelfFormSchema = z.object({
   name: z.string().min(1, { message: '书架名称不能为空' }).max(100, { message: '书架名称不能超过100个字符' }),
-  numShelves: z.coerce // Use z.coerce for better type handling from input
-    .number({ invalid_type_error: '层数必须是数字' })
+  numShelves: z.coerce // Coerce to number, then validate
+    .number({ required_error: "层数不能为空", invalid_type_error: '层数必须是数字' })
     .min(1, { message: '层数至少为1' })
-    .optional(),
-  isPrivate: z.boolean().optional(),
+    .max(10, { message: '层数最多为10' }),
+  isPrivate: z.boolean(), // No longer optional, will rely on defaultValues
   ownerId: z.number().nullable().optional(),
   familyId: z.number().nullable().optional(),
   assignToFamily: z.boolean().optional(),
   setAsOwnerInFamily: z.boolean().optional(),
-}).refine(() => {
-    // Validation will be more robust in onSubmitHandler where currentUser is definitely available
-    // This refine can be simplified or made more context-aware if needed at Zod level
-    return true; 
-}, {
-  message: "书架必须指定拥有者或关联一个家庭",
-  // path: ["ownerId"], // Path can be more general or handled in form.setError
+  shelfNamesArray: z.array(z.object({ name: z.string().max(50, {message: "层名不能超过50字符"}).optional() })).optional(),
 });
 
 type BookshelfFormData = z.infer<typeof bookshelfFormSchema>;
@@ -51,13 +47,18 @@ interface CreateBookshelfDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   context: 'my-bookshelf' | 'family-bookshelf';
   defaultFamilyId?: number | null;
-  onSuccess?: (newBookshelf: any) => void;
+  onSuccess?: (newBookshelf: Bookshelf) => void;
 }
 
-// Updated to use apiRequest
-async function createBookshelfAPI(data: { name: string; numShelves?: number; isPrivate?: boolean; ownerId?: number | null; familyId?: number | null; }) {
+async function createBookshelfAPI(data: { 
+  name: string; 
+  numShelves: number; 
+  isPrivate: boolean; 
+  ownerId?: number | null; 
+  familyId?: number | null; 
+  shelfNames?: Record<string, string>; 
+}) {
   const response = await apiRequest('POST', '/api/bookshelves', data);
-  // apiRequest already throws if response is not ok, so we just need to parse JSON if successful.
   return response.json(); 
 }
 
@@ -70,202 +71,167 @@ export function CreateBookshelfDialog({
 }: CreateBookshelfDialogProps) {
   const { user: currentUser, isLoadingUser, refetchUserData } = useAuth();
   const [isCreateFamilyDialogOpen, setIsCreateFamilyDialogOpen] = useReactState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const form = useForm<BookshelfFormData>({
     resolver: zodResolver(bookshelfFormSchema),
     defaultValues: {
       name: '',
-      numShelves: 3,
-      isPrivate: false,
+      numShelves: defaultNumShelvesConst,
+      isPrivate: context === 'my-bookshelf', // Default for my-bookshelf
       ownerId: null,
       familyId: null,
-      assignToFamily: context === 'my-bookshelf' && !!(currentUser?.families && currentUser.families.length > 0),
-      setAsOwnerInFamily: context === 'family-bookshelf', 
+      assignToFamily: false,
+      setAsOwnerInFamily: context === 'family-bookshelf',
+      shelfNamesArray: Array.from({ length: defaultNumShelvesConst }, () => ({ name: '' }))
     }
   });
-  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors } } = form;
+  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors }, getValues } = form;
   
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "shelfNamesArray"
+  });
+
+  const numShelvesWatch = watch("numShelves", defaultNumShelvesConst);
   const assignToFamilyWatch = watch('assignToFamily');
   const userFamilies = currentUser?.families || [];
 
   useEffect(() => {
+    const currentFieldsLength = fields.length;
+    const targetShelves = numShelvesWatch || 0;
+    if (currentFieldsLength < targetShelves) {
+      for (let i = currentFieldsLength; i < targetShelves; i++) {
+        append({ name: '' });
+      }
+    } else if (currentFieldsLength > targetShelves) {
+      for (let i = currentFieldsLength - 1; i >= targetShelves; i--) {
+        remove(i);
+      }
+    }
+  }, [numShelvesWatch, fields.length, append, remove]);
+  
+  useEffect(() => {
     if (isOpen) {
-      if (isLoadingUser || !currentUser) {
-        // Reset with basic defaults if user is still loading or not available
-        reset({
-          name: '',
-          numShelves: 3,
-          isPrivate: false,
-          ownerId: null,
-          familyId: null,
-          assignToFamily: false,
-          setAsOwnerInFamily: context === 'family-bookshelf',
-        });
-        return; 
+      const isMyBookshelfContext = context === 'my-bookshelf';
+      const currentNumShelves = getValues("numShelves") || defaultNumShelvesConst;
+      let initialOwnerId: number | null = null;
+      let initialFamilyId: number | null = null;
+      let initialAssignToFamily = false;
+      let initialSetAsOwnerInFamily = false;
+      let initialIsPrivate = isMyBookshelfContext;
+
+      if (currentUser) {
+        if (isMyBookshelfContext) {
+          initialOwnerId = currentUser.id;
+          initialAssignToFamily = userFamilies.length > 0;
+          if (initialAssignToFamily && userFamilies.length > 0) {
+            initialFamilyId = userFamilies[0]?.id || null;
+          }
+        } else { 
+          initialSetAsOwnerInFamily = true; 
+          if (initialSetAsOwnerInFamily) {
+            initialOwnerId = currentUser.id;
+          }
+          if (defaultFamilyId) {
+            initialFamilyId = defaultFamilyId;
+          } else if (userFamilies.length > 0) {
+            initialFamilyId = userFamilies[0]?.id || null;
+          }
+          initialIsPrivate = false; 
+        }
       }
 
-      const currentFamilies = currentUser.families || []; // Use potentially updated families
-      let determinedOwnerId: number | null = null;
-      let determinedFamilyId: number | null = null;
-      let defaultAssignToFamily = context === 'my-bookshelf' && currentFamilies.length > 0;
-      let defaultSetAsOwner = context === 'family-bookshelf';
-
-      if (context === 'my-bookshelf') {
-        determinedOwnerId = currentUser.id;
-        // If assignToFamily is checked by default and user has families, pick the first one
-        if (defaultAssignToFamily && currentFamilies.length > 0) {
-          determinedFamilyId = currentFamilies[0].id; 
-        }
-      } else if (context === 'family-bookshelf') {
-        if (defaultFamilyId) { // A specific family is passed as default (e.g. from active tab)
-            determinedFamilyId = defaultFamilyId;
-        } else if (currentFamilies.length > 0) { // No specific default, pick user's first family
-            determinedFamilyId = currentFamilies[0].id;
-        }
-        // If setAsOwnerInFamily is true, current user is the owner
-        if (watch('setAsOwnerInFamily')) {
-          determinedOwnerId = currentUser.id;
-        }
-      }
-      
-      reset({ 
+      reset({
         name: '',
-        numShelves: 3, 
-        isPrivate: false, 
-        ownerId: determinedOwnerId,
-        familyId: determinedFamilyId,
-        assignToFamily: defaultAssignToFamily,
-        setAsOwnerInFamily: defaultSetAsOwner,
+        numShelves: currentNumShelves,
+        isPrivate: initialIsPrivate,
+        ownerId: initialOwnerId,
+        familyId: initialFamilyId,
+        assignToFamily: initialAssignToFamily,
+        setAsOwnerInFamily: initialSetAsOwnerInFamily,
+        shelfNamesArray: Array.from({ length: currentNumShelves }, () => ({ name: '' }))
       });
     }
-  }, [isOpen, context, currentUser, isLoadingUser, defaultFamilyId, reset, watch]);
+  }, [isOpen, context, currentUser, defaultFamilyId, reset, getValues, userFamilies, defaultNumShelvesConst]);
 
-  const mutation = useMutation({
+  const mutation = useMutation<Bookshelf, Error, Parameters<typeof createBookshelfAPI>[0]>({
     mutationFn: createBookshelfAPI,
     onSuccess: (data) => {
-      console.log('书架创建成功！', data);
-      
-      // 同时刷新个人书架和家庭书架的缓存
+      toast({title: "书架创建成功", description: `书架 "${data.name}" 已成功创建。`});
       queryClient.invalidateQueries({ queryKey: ['/api/bookshelves/owner/current'] });
       queryClient.invalidateQueries({ queryKey: ['/api/bookshelves/family/current'] });
-      queryClient.invalidateQueries({ queryKey: ['booksByBookshelf'] });
-      
+      queryClient.invalidateQueries({ queryKey: ['/api/bookshelves'] });
       onOpenChange(false);
       if (onSuccess) {
         onSuccess(data);
       }
     },
     onError: (error: Error) => {
-      alert(`创建书架失败: ${error.message}`);
-      console.error('创建书架失败:', error);
+      toast({title: "创建书架失败", description: error.message || "发生未知错误。", variant: "destructive"});
     },
   });
 
   const onSubmitHandler = (data: BookshelfFormData) => {
     if (isLoadingUser || !currentUser) {
-        alert("用户信息仍在加载中或未登录，请稍后再试。");
+        toast({title: "错误", description: "用户信息加载中或未登录。", variant: "destructive"});
         return;
     }
 
-    // If trying to create a family bookshelf, but no familyId is selected AND the user has no families,
-    // prompt to create a family first.
-    const currentFormFamilies = currentUser?.families || []; // Get latest families for this check
-    if (context === 'family-bookshelf' && !data.familyId && (!currentFormFamilies || currentFormFamilies.length === 0)) {
-      setIsCreateFamilyDialogOpen(true);
-      return; // Stop bookshelf creation, user needs to create a family first
+    const shelfNamesMap: Record<string, string> = {};
+    if (data.shelfNamesArray) {
+      data.shelfNamesArray.forEach((shelf, index) => {
+        if (shelf.name && shelf.name.trim() !== '') {
+          shelfNamesMap[(index + 1).toString()] = shelf.name.trim();
+        }
+      });
     }
 
-    const payload: { name: string; numShelves?: number; isPrivate?: boolean; ownerId?: number | null; familyId?: number | null; } = {
+    const payload: Parameters<typeof createBookshelfAPI>[0] = {
       name: data.name,
-      numShelves: data.numShelves,
-      isPrivate: data.isPrivate,
+      numShelves: data.numShelves || defaultNumShelvesConst, // Ensure numShelves is always a number
+      isPrivate: !!data.isPrivate, // Ensure isPrivate is always a boolean
       ownerId: null, 
       familyId: null, 
+      shelfNames: shelfNamesMap
     };
 
     if (context === 'my-bookshelf') {
       payload.ownerId = currentUser.id;
-      if (data.assignToFamily && data.familyId) { // familyId here comes from the form's select
+      if (data.assignToFamily && data.familyId) {
         payload.familyId = data.familyId;
-      }
+      } 
+      // isPrivate is already set based on assignToFamily in defaultValues/useEffect or checkbox interaction
+      payload.isPrivate = data.assignToFamily ? !!data.isPrivate : true;
+
     } else if (context === 'family-bookshelf') {
-      // For family bookshelf, familyId is critical.
-      // It should have been set by useEffect (from defaultFamilyId or user's first family)
-      // or potentially allow selection if user has multiple families and no defaultFamilyId was provided.
-      // For now, we rely on the form's familyId value which was set by useEffect.
-      payload.familyId = data.familyId; // This should be the one set in useEffect or selected by user if a selector is added
-      
-      if (!payload.familyId && currentFormFamilies.length > 0) {
-        // Fallback: if somehow data.familyId is null but user has families, assign the first one.
-        // This indicates a potential logic flaw in form state management if it reaches here.
-        console.warn("Fallback: Assigning to user's first family as form.familyId was null for family-bookshelf context.");
-        payload.familyId = currentFormFamilies[0].id;
+      payload.familyId = data.familyId;
+      if (!payload.familyId) {
+        if (userFamilies.length > 0) {
+            payload.familyId = userFamilies[0].id;
+        } else {
+          setIsCreateFamilyDialogOpen(true); 
+          return;
+        }
       }
-      
       if (data.setAsOwnerInFamily) {
         payload.ownerId = currentUser.id;
       }
+      payload.isPrivate = false; 
     }
     
-    // 新增：针对 family-bookshelf 上下文的 familyId 校验
-    if (context === 'family-bookshelf' && payload.familyId === null) {
-        let errMessage = "无法创建家庭书架：必须选择一个家庭。";
-        // 检查 userFamilies 是否为空或未定义
-        if (!currentFormFamilies || currentFormFamilies.length === 0) {
-            errMessage += " 您当前未加入任何家庭，请先创建或加入一个家庭。";
-        } else {
-            // 这个情况理论上不应该发生，因为 useEffect 或 fallback 应该已处理，或者用户选择器未正确工作
-            errMessage += " 请确保已选择一个家庭。如果下拉列表中没有家庭可选，您可能需要先创建或加入一个家庭。";
-        }
-        alert(errMessage);
-        form.setError("familyId", { type: "manual", message: "请为家庭书架选择一个家庭" });
-        return;
-    }
-
     if (payload.ownerId === null && payload.familyId === null) {
-        let errMessage = "书架必须至少指定一个拥有者或关联一个家庭。";
-        if (context === 'family-bookshelf' && !payload.familyId) {
-            // 此处逻辑其实已被上面的 family-bookshelf 特定校验覆盖，但保留以防万一
-            errMessage = "在家庭书架模式下，必须选择或指定一个家庭。如果您没有家庭，请先加入或创建一个。";
-        }
-        alert(errMessage);
-        console.error("Validation Error:", errMessage, "Payload:", payload, "Form Data:", data, "Current User:", currentUser);
-        // Set error on a relevant field or a general form error
-        form.setError(context === 'family-bookshelf' && !payload.familyId ? "familyId" : "ownerId", {
-             type: "manual", 
-             message: errMessage 
-        });
+        toast({title:"提交错误", description: "书架必须指定拥有者或关联一个家庭。", variant: "destructive"});
         return;
     }
-
-    console.log("Submitting payload for CreateBookshelfDialog:", payload, "Form data:", data, "Context:", context, "DefaultFamilyId:", defaultFamilyId, "UserFamilies:", userFamilies, "Current User Object:", currentUser); // Enhanced log
     mutation.mutate(payload);
   };
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
         onOpenChange(open);
-        if (!open) {
-            // Reset form to initial determined defaults when dialog closes
-            // The useEffect logic will re-run when it opens again.
-            const latestUserFamilies = currentUser?.families || [];
-            const initialFamilyId = (context === 'family-bookshelf') 
-                ? (defaultFamilyId || (latestUserFamilies.length > 0 ? latestUserFamilies[0].id : null)) 
-                : ((context === 'my-bookshelf' && form.getValues('assignToFamily') && latestUserFamilies.length > 0) ? latestUserFamilies[0].id : null);
-            const initialOwnerId = (context === 'my-bookshelf') 
-                ? (currentUser?.id || null) 
-                : ((context === 'family-bookshelf' && form.getValues('setAsOwnerInFamily') && currentUser) ? currentUser.id : null);
-
-            reset({ 
-                name: '', 
-                numShelves: 3, 
-                isPrivate: false, 
-                ownerId: initialOwnerId,
-                familyId: initialFamilyId, 
-                assignToFamily: context === 'my-bookshelf' && !!(initialFamilyId), 
-                setAsOwnerInFamily: context === 'family-bookshelf' && !!(initialOwnerId && initialFamilyId) 
-            });
-        }
+        if (!open) { reset(); }
     }}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
@@ -273,20 +239,14 @@ export function CreateBookshelfDialog({
           <DialogDescription>
             {context === 'my-bookshelf' 
               ? '为您的个人图书馆添加一个新的书架。' 
-              : `为家庭"${currentUser?.families?.find(f => f.id === (watch('familyId') || defaultFamilyId))?.name || (watch('familyId') ? '所选家庭' : (userFamilies && userFamilies.length > 0 ? userFamilies[0].name : '...'))}"添加一个新的共享书架。`}
+              : `为家庭"${userFamilies.find(f => f.id === (watch('familyId') || defaultFamilyId))?.name || (watch('familyId') ? '所选家庭' : (userFamilies.length > 0 ? userFamilies[0].name : '...'))}"添加一个新的共享书架。`}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Prompt to create a family if in family-bookshelf context and user has no families AND no family is yet selected by form */}
-        {context === 'family-bookshelf' && (!userFamilies || userFamilies.length === 0) && !watch('familyId') && (
+        {context === 'family-bookshelf' && userFamilies.length === 0 && !watch('familyId') && (
           <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md text-sm">
             <p>您当前没有加入任何家庭。您需要先创建一个家庭才能为其添加书架。</p>
-            <Button 
-              type="button" 
-              variant="link" 
-              className="p-0 h-auto text-yellow-700 hover:text-yellow-800 font-semibold"
-              onClick={() => setIsCreateFamilyDialogOpen(true)}
-            >
+            <Button type="button" variant="link" className="p-0 h-auto text-yellow-700 hover:text-yellow-800 font-semibold" onClick={() => setIsCreateFamilyDialogOpen(true)}>
               点击这里创建家庭
             </Button>
           </div>
@@ -295,26 +255,29 @@ export function CreateBookshelfDialog({
         <form onSubmit={handleSubmit(onSubmitHandler)} className="space-y-4">
           <div>
             <Label htmlFor="name">书架名称</Label>
-            <Input id="name" {...register('name')} placeholder="例如：客厅书架，卧室书房" />
+            <Input id="name" {...register('name')} placeholder="例如：客厅书架" />
             {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="numShelves">层数</Label>
+              <Label htmlFor="numShelves">层数 (1-10)</Label>
               <Controller
                 name="numShelves"
                 control={control}
+                defaultValue={defaultNumShelvesConst} // Ensure a default value for controller
                 render={({ field }) => (
                   <Input 
                     id="numShelves" 
                     type="number" 
                     {...field} 
                     onChange={e => {
-                        const value = e.target.value;
-                        field.onChange(value === '' ? undefined : value);
+                        const value = parseInt(e.target.value, 10);
+                        const processedValue = isNaN(value) ? defaultNumShelvesConst : Math.max(1, Math.min(10, value));
+                        field.onChange(processedValue);
                     }}
-                    value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                    value={field.value || ''} // Handle undefined/null for input display
+                    min="1" max="10"
                   />
                 )}
               />
@@ -322,68 +285,59 @@ export function CreateBookshelfDialog({
             </div>
              <div>
                 <Label htmlFor="isPrivate" className="flex items-center space-x-2 mt-2 pt-5">
-                    <Controller
-                        name="isPrivate"
-                        control={control}
-                        render={({ field }) => (
-                            <Checkbox
-                            id="isPrivate"
-                            checked={!!field.value}
-                            onCheckedChange={field.onChange}
-                            />
-                        )}
-                    />
-                    <span>设为私有</span>
+                    <Controller name="isPrivate" control={control} defaultValue={context === 'my-bookshelf'} render={({ field }) => (
+                       <Checkbox id="isPrivate" checked={field.value} onCheckedChange={field.onChange} /> // Directly use field.value
+                    )} />
+                    <span>设为私有 (仅自己可见)</span>
                 </Label>
-                {errors.isPrivate && <p className="text-sm text-red-500 mt-1">{errors.isPrivate.message}</p>}
             </div>
           </div>
           
-          {context === 'my-bookshelf' && userFamilies && userFamilies.length > 0 && (
+          {fields.map((item, index) => (
+            <div key={item.id}>
+              <Label htmlFor={`shelfNamesArray.${index}.name`}>{`第 ${index + 1} 层名称 (可选)`}</Label>
+              <Input
+                id={`shelfNamesArray.${index}.name`}
+                {...register(`shelfNamesArray.${index}.name`)}
+                placeholder={`例如：文学、历史、工具书`}
+              />
+              {errors.shelfNamesArray?.[index]?.name && 
+                <p className="text-sm text-red-500 mt-1">{errors.shelfNamesArray[index]?.name?.message}</p>}
+            </div>
+          ))}
+          
+          {context === 'my-bookshelf' && userFamilies.length > 0 && (
             <>
               <div className="flex items-center space-x-2">
-                 <Controller
-                    name="assignToFamily"
-                    control={control}
-                    render={({ field }) => (
-                        <Checkbox
-                        id="assignToFamily"
-                        checked={!!field.value}
+                 <Controller name="assignToFamily" control={control} render={({ field }) => (
+                    <Checkbox id="assignToFamily" checked={!!field.value} 
                         onCheckedChange={(checkedBool) => {
                             const isChecked = Boolean(checkedBool);
                             field.onChange(isChecked);
                             if (!isChecked) {
                                 setValue('familyId', null);
-                            } else if (userFamilies.length > 0 && !form.getValues('familyId')) {
-                                // If checked and no familyId yet, default to first family
-                                setValue('familyId', userFamilies[0].id);
+                                setValue('isPrivate', true);
+                            } else {
+                                if (userFamilies.length > 0 && !getValues('familyId')) {
+                                    setValue('familyId', userFamilies[0].id);
+                                }
+                                setValue('isPrivate', false);
                             }
                         }}
-                        />
-                    )}
                     />
+                )} />
                 <Label htmlFor="assignToFamily">同时共享到家庭</Label>
               </div>
               {assignToFamilyWatch && (
                 <div>
-                  <Label htmlFor="familyIdMyBookshelf">选择家庭 (我的书架)</Label>
-                  <Controller
-                    name="familyId"
-                    control={control}
-                    rules={{ required: assignToFamilyWatch ? '请选择一个家庭' : false }}
+                  <Label htmlFor="familyIdMyBookshelf">选择家庭</Label>
+                  <Controller name="familyId" control={control} rules={{ required: assignToFamilyWatch ? '请选择一个家庭' : false }}
                     render={({ field }) => (
-                      <Select 
-                        onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : null)} 
-                        value={field.value?.toString() || ""} 
-                      >
-                        <SelectTrigger id="familyIdMyBookshelf">
-                          <SelectValue placeholder="选择一个家庭..." />
-                        </SelectTrigger>
+                      <Select onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : null)} value={field.value?.toString() || ""} >
+                        <SelectTrigger id="familyIdMyBookshelf"><SelectValue placeholder="选择一个家庭..." /></SelectTrigger>
                         <SelectContent>
                           {userFamilies.map((family: FamilySimpleDto) => (
-                            <SelectItem key={`my-fam-${family.id}`} value={family.id.toString()}>
-                              {family.name}
-                            </SelectItem>
+                            <SelectItem key={`my-fam-${family.id}`} value={family.id.toString()}>{family.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -395,30 +349,23 @@ export function CreateBookshelfDialog({
             </>
           )}
 
-        {/* Family selection for family-bookshelf context if no defaultFamilyId and user has multiple families */}
-        {context === 'family-bookshelf' && !defaultFamilyId && userFamilies && userFamilies.length > 1 && (
+        {context === 'family-bookshelf' && userFamilies.length > 0 && (
             <div>
-                <Label htmlFor="familyIdFamilyBookshelf">选择家庭 (家庭书架)</Label>
-                <Controller
-                name="familyId"
-                control={control}
+                <Label htmlFor="familyIdFamilyBookshelf">所属家庭</Label>
+                <Controller name="familyId" control={control} 
                 rules={{ required: '必须为家庭书架选择一个家庭' }}
+                defaultValue={defaultFamilyId || (userFamilies.length > 0 ? userFamilies[0].id : undefined)}
                 render={({ field }) => (
                     <Select 
-                    onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : null)} 
-                    value={field.value?.toString() || ""}
-                    defaultValue={field.value?.toString() || (userFamilies.length > 0 ? userFamilies[0].id.toString() : "")}
+                      onValueChange={(value) => field.onChange(value ? parseInt(value, 10) : null)} 
+                      value={field.value?.toString() || ""}
                     >
-                    <SelectTrigger id="familyIdFamilyBookshelf">
-                        <SelectValue placeholder="选择一个家庭..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {userFamilies.map((family: FamilySimpleDto) => (
-                        <SelectItem key={`fam-shelf-fam-${family.id}`} value={family.id.toString()}>
-                            {family.name}
-                        </SelectItem>
-                        ))}
-                    </SelectContent>
+                      <SelectTrigger id="familyIdFamilyBookshelf"><SelectValue placeholder="选择一个家庭..." /></SelectTrigger>
+                      <SelectContent>
+                          {userFamilies.map((family: FamilySimpleDto) => (
+                          <SelectItem key={`fam-shelf-fam-${family.id}`} value={family.id.toString()}>{family.name}</SelectItem>
+                          ))}
+                      </SelectContent>
                     </Select>
                 )}
                 />
@@ -428,30 +375,15 @@ export function CreateBookshelfDialog({
 
           {context === 'family-bookshelf' && (
              <div className="flex items-center space-x-2">
-                <Controller
-                    name="setAsOwnerInFamily"
-                    control={control}
-                    render={({ field }) => (
-                        <Checkbox
-                        id="setAsOwnerInFamily"
-                        checked={!!field.value}
-                        onCheckedChange={field.onChange}
-                        />
-                    )}
-                    />
+                <Controller name="setAsOwnerInFamily" control={control} render={({ field }) => (
+                    <Checkbox id="setAsOwnerInFamily" checked={!!field.value} onCheckedChange={field.onChange} />
+                )} />
                 <Label htmlFor="setAsOwnerInFamily">将我指定为此家庭书架的管理者</Label>
             </div>
           )}
-           {errors.root?.message && <p className="text-sm text-red-500 mt-1">{errors.root.message}</p>}
-           {(errors.ownerId?.type === 'manual' || errors.familyId?.type === 'manual') && 
-             <p className="text-sm text-red-500 mt-1">
-                 {errors.ownerId?.message || errors.familyId?.message}
-            </p>}
 
           <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="outline">取消</Button>
-            </DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline">取消</Button></DialogClose>
             <Button type="submit" disabled={mutation.isPending || isLoadingUser}>
               {mutation.isPending ? '创建中...' : (isLoadingUser ? '加载用户数据...': '创建书架')}
             </Button>
@@ -464,18 +396,15 @@ export function CreateBookshelfDialog({
         onSuccess={async (newFamily: Family) => {
           setIsCreateFamilyDialogOpen(false);
           await refetchUserData(); 
-          queryClient.invalidateQueries({ queryKey: ['/api/users/current'] }); // Belt and suspenders for other places that might use this key
-          
-          // Set the newly created family as selected in the bookshelf form
+          queryClient.invalidateQueries({ queryKey: ['/api/users/current'] }); 
           if (newFamily && newFamily.id) {
             setValue('familyId', newFamily.id, { shouldValidate: true, shouldDirty: true });
-            // Ensure the dialog description updates if it was showing a placeholder
-            // This might require a re-render or ensuring watch('familyId') picks up the change for the description
           }
-          alert("家庭创建成功！现在您可以为新家庭创建书架了。");
+          toast({title: "家庭创建成功", description: "现在您可以为新家庭创建书架了。"});
         }}
       />
     </Dialog>
   );
 }
+
 

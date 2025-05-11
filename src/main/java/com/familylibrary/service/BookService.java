@@ -168,4 +168,15 @@ public class BookService {
         }
         return dto;
     }
+
+    @Transactional(readOnly = true)
+    public List<BookDto> searchBooks(String searchTerm) {
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Book> books = bookRepository.searchBooks(searchTerm.trim());
+        return books.stream()
+                .map(this::convertToBookDetailDto) // Using detail DTO to include lending info if needed on search results
+                .collect(Collectors.toList());
+    }
 } 

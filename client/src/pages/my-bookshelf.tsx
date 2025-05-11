@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Bookshelf as BookshelfType, ShelfPosition } from "@/lib/types";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import type { Bookshelf as BookshelfType, ShelfPosition, Book, User } from "@/lib/types";
 import { Bookshelf } from "@/components/ui/bookshelf";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,8 +8,19 @@ import { useState, useEffect } from "react";
 import { CreateBookshelfDialog } from "@/components/bookshelf/CreateBookshelfDialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useNavigate } from "react-router-dom";
-import type { Book } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Trash2 } from "lucide-react";
 
 async function fetchMyBookshelves(): Promise<BookshelfType[]> {
   const response = await apiRequest('GET', '/api/bookshelves/owner/current');
@@ -38,16 +49,20 @@ export default function MyBookshelf() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeTabBookshelfId, setActiveTabBookshelfId] = useState<number | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [shelfToDelete, setShelfToDelete] = useState<BookshelfType | null>(null);
 
-  // 获取个人书架列表
-  const { data: myBookshelves, isLoading: isLoadingBookshelves, error: bookshelvesError } = useQuery<BookshelfType[], Error>({
+  const { data: currentUser } = useQuery<User>({ queryKey: ['/api/users/current'] });
+
+  const { data: myBookshelves, isLoading: isLoadingBookshelves, error: bookshelvesError, refetch: refetchMyBookshelves } = useQuery<BookshelfType[], Error>({
     queryKey: ['/api/bookshelves/owner/current'],
     queryFn: fetchMyBookshelves,
+    enabled: !!currentUser,
   });
 
-  // 设置第一个书架为默认选中
   useEffect(() => {
     if (myBookshelves && myBookshelves.length > 0 && activeTabBookshelfId === null) {
       console.log("默认选中个人书架:", myBookshelves[0].id);
@@ -55,15 +70,45 @@ export default function MyBookshelf() {
     }
   }, [myBookshelves, activeTabBookshelfId]);
 
-  // 获取当前激活书架的信息
   const activeBookshelf = myBookshelves?.find(bs => bs.id === activeTabBookshelfId);
 
-  // 查询当前激活书架的书籍
   const { data: booksForActiveBookshelf, isLoading: isLoadingBooks, error: booksError } = useQuery<Book[], Error>({
     queryKey: ['/api/books', { bookshelfId: activeBookshelf?.id }],
     queryFn: () => fetchBooksForBookshelf(activeBookshelf?.id),
-    enabled: !!activeBookshelf, // 只有当有激活书架时才执行查询
+    enabled: !!activeBookshelf,
   });
+
+  const deleteBookshelfMutation = useMutation<void, Error, number>({
+    mutationFn: async (bookshelfId: number) => {
+      await apiRequest("DELETE", `/api/bookshelves/${bookshelfId}`);
+    },
+    onSuccess: (_, deletedShelfId) => {
+      toast({ title: t('myBookshelf.deleteSuccessTitle'), description: t('myBookshelf.deleteSuccessDesc', { name: shelfToDelete?.name }) });
+      refetchMyBookshelves();
+      setIsDeleteDialogOpen(false);
+      setShelfToDelete(null);
+      if (activeTabBookshelfId === deletedShelfId) {
+        const remainingShelves = myBookshelves?.filter(s => s.id !== deletedShelfId);
+        setActiveTabBookshelfId(remainingShelves && remainingShelves.length > 0 ? remainingShelves[0].id : null);
+      }
+    },
+    onError: (error) => {
+      toast({ title: t('myBookshelf.deleteErrorTitle'), description: error.message || t('myBookshelf.deleteErrorDesc'), variant: "destructive" });
+      setIsDeleteDialogOpen(false);
+      setShelfToDelete(null);
+    },
+  });
+
+  const handleDeleteBookshelfClick = (bookshelf: BookshelfType) => {
+    setShelfToDelete(bookshelf);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteBookshelf = () => {
+    if (shelfToDelete) {
+      deleteBookshelfMutation.mutate(shelfToDelete.id);
+    }
+  };
 
   const handleCreateBookshelf = () => {
     setIsCreateDialogOpen(true);
@@ -73,7 +118,6 @@ export default function MyBookshelf() {
     console.log("新的个人书架已创建:", newBookshelf);
     queryClient.invalidateQueries({ queryKey: ['/api/bookshelves/owner/current'] });
     setIsCreateDialogOpen(false);
-    // 自动选择新创建的书架
     setActiveTabBookshelfId(newBookshelf.id);
   };
 
@@ -90,8 +134,8 @@ export default function MyBookshelf() {
     return (
       <div className="p-4">
         <Skeleton className="h-8 w-1/4 mb-4" />
-        <Skeleton className="h-10 w-full mb-4" /> {/* 用于TabsList */}
-        <Skeleton className="h-[300px] w-full" /> {/* 用于TabsContent */}
+        <Skeleton className="h-10 w-full mb-4" />
+        <Skeleton className="h-[300px] w-full" />
       </div>
     );
   }
@@ -137,15 +181,30 @@ export default function MyBookshelf() {
 
       <Tabs value={activeTabBookshelfId?.toString()} onValueChange={(val) => setActiveTabBookshelfId(Number(val))}>
         <TabsList className="mb-4">
-          {myBookshelves.map((shelf) => (
-            <TabsTrigger key={shelf.id} value={shelf.id.toString()}>
-              {shelf.name}
-            </TabsTrigger>
+          {myBookshelves?.map((shelf) => (
+            <div key={shelf.id} className="flex items-center group">
+              <TabsTrigger value={shelf.id.toString()} className="rounded-r-none group-hover:bg-muted/50">
+                {shelf.name}
+              </TabsTrigger>
+              {currentUser && shelf.ownerId === currentUser.id && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="h-full px-2 rounded-l-none opacity-0 group-hover:opacity-100 transition-opacity border-l border-transparent group-hover:border-border"
+                  onClick={() => handleDeleteBookshelfClick(shelf)}
+                  disabled={deleteBookshelfMutation.isPending && shelfToDelete?.id === shelf.id}
+                >
+                  {deleteBookshelfMutation.isPending && shelfToDelete?.id === shelf.id 
+                    ? <i className="fas fa-spinner fa-spin text-xs"></i> 
+                    : <Trash2 className="h-4 w-4 text-destructive/70 hover:text-destructive" />}
+                </Button>
+              )}
+            </div>
           ))}
         </TabsList>
 
-        {myBookshelves.map((shelf) => (
-          <TabsContent key={shelf.id} value={shelf.id.toString()}>
+        {myBookshelves?.map((shelf) => (
+          <TabsContent key={`content-${shelf.id}`} value={shelf.id.toString()}>
             {activeBookshelf && activeBookshelf.id === shelf.id ? (
               isLoadingBooks ? (
                 <Skeleton className="h-[300px] w-full" />
@@ -153,13 +212,15 @@ export default function MyBookshelf() {
                 <div className="text-red-500">{t('myBookshelf.loadBooksError')}: {booksError.message}</div>
               ) : (
                 <Bookshelf
+                  bookshelfId={activeBookshelf.id}
                   numShelves={activeBookshelf.numShelves || 1}
+                  shelfNames={activeBookshelf.shelfNames}
                   books={booksForActiveBookshelf || []}
                   onAddBook={handleAddBookToShelf}
                 />
               )
             ) : (
-              <div>{t('myBookshelf.selectTabToView', { name: shelf.name, defaultValue: `选择"${shelf.name}"查看书籍` })}</div>
+              <div>{t('myBookshelf.selectTabToView', { name: shelf.name })}</div>
             )}
           </TabsContent>
         ))}
@@ -171,6 +232,25 @@ export default function MyBookshelf() {
         context="my-bookshelf"
         onSuccess={handleBookshelfCreated}
       />
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('myBookshelf.deleteConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('myBookshelf.deleteConfirmDesc', { name: shelfToDelete?.name || '' })}
+              <br/>
+              <strong className="text-destructive">{t('myBookshelf.deleteWarning')}</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShelfToDelete(null)}>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteBookshelf} disabled={deleteBookshelfMutation.isPending} className="bg-destructive hover:bg-destructive/90">
+              {deleteBookshelfMutation.isPending ? t('myBookshelf.deleting') : t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

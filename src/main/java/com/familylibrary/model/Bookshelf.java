@@ -33,6 +33,10 @@ public class Bookshelf {
     @Column(name = "is_private", nullable = false)
     private boolean isPrivate = false;
 
+    @Lob
+    @Column(name = "shelf_names_json", columnDefinition = "TEXT")
+    private String shelfNamesJson;
+
     @OneToMany(mappedBy = "bookshelf", cascade = CascadeType.ALL, orphanRemoval = true)
     @EqualsAndHashCode.Exclude
     @ToString.Exclude

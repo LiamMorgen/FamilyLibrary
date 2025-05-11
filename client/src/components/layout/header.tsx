@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext"; // Import useAuth
-// import { Link, useNavigate } from "react-router-dom"; // 移除未使用的导入
+import { useNavigate } from "react-router-dom"; // Import useNavigate
+// import { Link } from "react-router-dom"; // 移除未使用的导入
 import type { User } from "@/lib/types";
 import { 
   DropdownMenu,
@@ -18,6 +19,7 @@ export default function Header() {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState("");
   const { token, logout } = useAuth(); // Get token and logout from AuthContext
+  const navigate = useNavigate(); // Initialize useNavigate
 
   // Fetch current user only if token exists
   const { data: currentUser, isLoading: isLoadingCurrentUser } = useQuery<User>({
@@ -27,8 +29,9 @@ export default function Header() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle search
-    console.log("Searching for:", searchQuery);
+    if (searchQuery.trim()) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
   };
 
   const changeLanguage = (language: string) => {

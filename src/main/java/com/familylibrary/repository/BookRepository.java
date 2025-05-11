@@ -30,6 +30,9 @@ public interface BookRepository extends JpaRepository<Book, Long> {
 
     List<Book> findByAddedById(Long userId);
 
+    @Query("SELECT b FROM Book b WHERE lower(b.title) LIKE lower(concat('%', :searchTerm, '%')) OR lower(b.author) LIKE lower(concat('%', :searchTerm, '%')) OR lower(b.isbn) LIKE lower(concat('%', :searchTerm, '%'))")
+    List<Book> searchBooks(@Param("searchTerm") String searchTerm);
+
     // Example of a more complex query to find books by title in a specific user's bookshelves
     @Query("SELECT b FROM Book b WHERE b.bookshelf.owner = :user AND lower(b.title) LIKE lower(concat('%', :titleKeyword, '%'))")
     List<Book> findByUserAndTitleContainingIgnoreCase(@Param("user") User user, @Param("titleKeyword") String titleKeyword);
