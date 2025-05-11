@@ -4,10 +4,8 @@ import com.familylibrary.dto.BookDto;
 import com.familylibrary.dto.CreateBookRequest;
 import com.familylibrary.dto.ShelfPositionDto;
 import com.familylibrary.dto.UserDto;
-import com.familylibrary.model.Book;
-import com.familylibrary.model.Bookshelf;
-import com.familylibrary.model.User;
-import com.familylibrary.model.BookStatus;
+import com.familylibrary.model.*;
+import com.familylibrary.repository.BookLendingRepository;
 import com.familylibrary.repository.BookRepository;
 import com.familylibrary.repository.BookshelfRepository;
 import com.familylibrary.repository.UserRepository;
@@ -31,15 +29,16 @@ public class BookService {
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
     private final BookshelfRepository bookshelfRepository;
+    private final BookLendingRepository bookLendingRepository;
 
     @Transactional(readOnly = true)
     public List<BookDto> getAllBooks(Long bookshelfId, String query, Integer limit, String sort) {
         if (bookshelfId != null) {
             List<Book> books = bookRepository.findByBookshelfId(bookshelfId);
-            return books.stream().map(this::convertToDto).collect(Collectors.toList());
+            return books.stream().map(this::convertToBookDetailDto).collect(Collectors.toList());
         } else {
             List<Book> allBooks = bookRepository.findAll();
-            return allBooks.stream().map(this::convertToDto).collect(Collectors.toList());
+            return allBooks.stream().map(this::convertToBookDetailDto).collect(Collectors.toList());
         }
     }
 
@@ -47,7 +46,7 @@ public class BookService {
     public BookDto getBookById(Long id) {
         Book book = bookRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Book not found with id: " + id));
-        return convertToDto(book);
+        return convertToBookDetailDto(book);
     }
 
     @Transactional
@@ -73,6 +72,7 @@ public class BookService {
         book.setPublicationDate(request.getPublicationDate());
         book.setCategory(request.getGenre());
         book.setCoverImage(request.getCoverImageUrl());
+        book.setCoverImageUrl(request.getCoverImageUrl());
         book.setDescription(request.getDescription());
         book.setBookshelf(bookshelf);
         book.setShelfNumber(request.getShelfNumber());
@@ -81,7 +81,7 @@ public class BookService {
         book.setAddedBy(currentUser);
 
         Book savedBook = bookRepository.save(book);
-        return convertToDto(savedBook);
+        return convertToBookDetailDto(savedBook);
     }
 
     private User getCurrentUser() {
@@ -119,7 +119,7 @@ public class BookService {
         dto.setPublisher(book.getPublisher());
         dto.setPublicationDate(book.getPublicationDate());
         dto.setSummary(book.getDescription());
-        dto.setCoverImageUrl(book.getCoverImage());
+        dto.setCoverImageUrl(book.getCoverImageUrl() != null ? book.getCoverImageUrl() : book.getCoverImage());
         dto.setStatus(book.getStatus() != null ? book.getStatus().name() : null);
         
         Bookshelf bookshelf = book.getBookshelf();
@@ -128,7 +128,7 @@ public class BookService {
             dto.setBookshelfName(bookshelf.getName());
         }
         
-        if (book.getShelfNumber() != null) {
+        if (book.getShelfNumber() != null && book.getPositionNumber() != null) {
             dto.setShelfPosition(new ShelfPositionDto(book.getShelfNumber(), book.getPositionNumber()));
         } else {
             dto.setShelfPosition(null);
@@ -145,6 +145,27 @@ public class BookService {
             dto.setAddedBy(addedByDto);
         }
         
+        return dto;
+    }
+
+    private BookDto convertToBookDetailDto(Book book) {
+        if (book == null) return null;
+        BookDto dto = convertToDto(book);
+
+        if (book.getStatus() == BookStatus.BORROWED) {
+            List<BookLending> lendings = bookLendingRepository.findByBookAndStatus(book, LendingStatus.BORROWED);
+            if (!lendings.isEmpty()) {
+                BookLending currentLending = lendings.get(0);
+                dto.setCurrentLendingId(currentLending.getId());
+                if (currentLending.getBorrower() != null) {
+                    UserDto borrowerDto = new UserDto();
+                    borrowerDto.setId(currentLending.getBorrower().getId());
+                    borrowerDto.setUsername(currentLending.getBorrower().getUsername());
+                    borrowerDto.setDisplayName(currentLending.getBorrower().getDisplayName());
+                    dto.setCurrentBorrower(borrowerDto);
+                }
+            }
+        }
         return dto;
     }
 } 

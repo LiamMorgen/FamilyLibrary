@@ -60,6 +60,12 @@ export interface Book {
   shelfPosition?: ShelfPosition | null;
   status: string; // "available", "borrowed", "reading"
   addedDate: string | Date;
+  currentLendingId?: number;
+  currentBorrower?: {
+    id: number;
+    username: string;
+    displayName?: string;
+  };
 }
 
 export interface BookLending {
@@ -96,4 +102,28 @@ export interface Activity {
 export interface FamilySimpleDto {
   id: number;
   name: string;
+}
+
+// AI Related Types
+export interface AIMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface BookRecommendation {
+  title: string;
+  author: string;
+  reason?: string;
+  coverImageUrl?: string;
+  isbn?: string;
+}
+
+export interface InitialAIAnalysisResponse {
+  analysisText: string;
+  recommendedBooks: BookRecommendation[];
+}
+
+export interface AIQuery {
+  query: string;
+  history?: AIMessage[];
 }

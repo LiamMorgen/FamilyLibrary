@@ -27,6 +27,9 @@ public class Book {
     @Column(name = "cover_image")
     private String coverImage;
 
+    @Column(name = "cover_image_url")
+    private String coverImageUrl;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

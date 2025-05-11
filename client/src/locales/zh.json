@@ -62,7 +62,14 @@
     "createPersonalBookshelf": "创建个人书架",
     "noRecentBooks": "最近没有添加书籍",
     "noActivities": "没有最近活动",
-    "noBooks": "书架暂无书籍"
+    "noBooks": "书架暂无书籍",
+    "aiChatTitle": "与AI聊聊您的阅读",
+    "aiChatPlaceholder": "输入您想说的... (Shift+Enter换行)",
+    "aiChatError": "抱歉，AI对话暂时遇到问题。",
+    "aiThinking": "AI思考中...",
+    "aiChatInitialWelcome": "AI助手正在启动，请稍候...",
+    "aiDefaultWelcome": "你好！开始您的阅读对话吧。",
+    "aiChatErrorFallback": "抱歉，AI助手初始化失败，您可以直接开始提问。"
   },
   "myBookshelf": {
     "title": "我的书架",
@@ -205,7 +212,17 @@
     "return": "归还",
     "markAsReading": "标记为阅读中",
     "markAsFinished": "标记为已读",
-    "addRating": "添加评分"
+    "addRating": "添加评分",
+    "borrowSuccessTitle": "借阅成功",
+    "borrowSuccessDesc": "书籍已成功添加到您的借阅列表！",
+    "borrowErrorTitle": "借阅失败",
+    "borrowErrorDesc": "无法借阅该书籍，请稍后再试。",
+    "borrowing": "正在借阅...",
+    "returnSuccessTitle": "归还成功",
+    "returnSuccessDesc": "书籍已成功归还！",
+    "returnErrorTitle": "归还失败",
+    "returnErrorDesc": "无法归还该书籍，请稍后再试。",
+    "returning": "正在归还..."
   },
   "activityFeed": {
     "startedReading": "{{user}} 开始阅读 《{{book}}》",

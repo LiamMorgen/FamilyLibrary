@@ -12,6 +12,7 @@ import { Link, useLocation } from "react-router-dom"; // 移除了 useNavigate
 // import { ScrollArea } from "@/components/ui/scroll-area"; // 移除
 import { useState } from "react"; // 添加useState
 import { CreateFamilyDialog } from "@/components/dialogs/CreateFamilyDialog"; // 导入CreateFamilyDialog
+import { fetchMyActiveLendingsCount } from "@/lib/queryClient"; // Import the new API function
 
 export default function Sidebar() {
   const location = useLocation(); 
@@ -20,21 +21,16 @@ export default function Sidebar() {
   const token = localStorage.getItem('token'); // Get token
   const [isCreateFamilyDialogOpen, setIsCreateFamilyDialogOpen] = useState(false); // 添加状态控制创建家庭对话框
 
-  // Hide sidebar on mobile
-  if (isMobile) {
-    return null;
-  }
-
   // @ts-ignore
   const { data: currentUser } = useQuery<User>({
     queryKey: ['/api/users/current'],
-    enabled: !!token, // Only enable if token exists
+    enabled: !!token,
   });
 
   // Fetch family only if token exists
   const { data: family, isLoading: isLoadingFamily } = useQuery<Family>({
     queryKey: ['/api/families/current'],
-    enabled: !!token, // Only enable if token exists
+    enabled: !!token && !!currentUser, // Also depend on currentUser for consistency
   });
 
   // Fetch family members only if token exists and family data is loaded
@@ -42,6 +38,21 @@ export default function Sidebar() {
     queryKey: ['/api/families/current/users'],
     enabled: !!token && !!family, // Depend on token and family data
   });
+
+  // Fetch count of current user's active lendings for the badge
+  // @ts-ignore
+  const { data: myActiveLendingsCount, isLoading: isLoadingMyActiveLendingsCount } = useQuery<number>({
+    queryKey: ['/api/book-lendings/my-active/count'], // Consistent queryKey with dashboard
+    queryFn: fetchMyActiveLendingsCount,
+    enabled: !!currentUser, // Only fetch if currentUser is loaded
+    // staleTime: 5 * 60 * 1000, // Optional: Cache for 5 minutes
+    // refetchInterval: 5 * 60 * 1000, // Optional: Refetch every 5 minutes
+  });
+
+  // Hide sidebar on mobile
+  if (isMobile) {
+    return null;
+  }
 
   return (
     <aside className="hidden md:block bg-white w-64 shadow-lg">
@@ -103,7 +114,7 @@ export default function Sidebar() {
               </Link>
             </li>
             <li className="mb-1">
-              <Link to="/borrowing-records"> {/* 使用 to prop */}
+              <Link to="/borrowing-records">
                 <div className={`flex items-center px-4 py-2 rounded-lg ${
                   location.pathname === '/borrowing-records' 
                     ? 'text-primary bg-accent/30' 
@@ -111,7 +122,11 @@ export default function Sidebar() {
                 }`}>
                   <i className="fas fa-exchange-alt w-5"></i>
                   <span className="ml-2">{t('sidebar.borrowingRecords')}</span>
-                  <span className="ml-auto bg-red-500 text-white text-xs px-1 rounded">2</span>
+                  {myActiveLendingsCount !== undefined && myActiveLendingsCount > 0 && (
+                    <span className="ml-auto bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                      {myActiveLendingsCount}
+                    </span>
+                  )}
                 </div>
               </Link>
             </li>

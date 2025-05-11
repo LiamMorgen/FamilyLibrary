@@ -28,5 +28,9 @@ public class BookDto {
     private UserDto addedBy; // Who added the book (simplified to UserDto)
     private Integer totalPages;
     private String language;
+
+    // Fields for current lending information if applicable
+    private Long currentLendingId;
+    private UserDto currentBorrower; // Contains id, username, displayName
     // Potentially other fields like averageRating, tags, etc.
 } 

@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { QueryFunction } from "@tanstack/react-query";
+import type { InitialAIAnalysisResponse, AIQuery, AIMessage, BookLending } from "./types";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -28,6 +29,35 @@ export async function apiRequest(
 
   await throwIfResNotOk(res);
   return res;
+}
+
+// New API functions for AI features
+export async function fetchInitialAIAnalysis(): Promise<InitialAIAnalysisResponse> {
+  const response = await apiRequest("GET", "/api/ai/initial-analysis");
+  return response.json();
+}
+
+export async function postAIChatMessage(payload: AIQuery): Promise<AIMessage> {
+  const response = await apiRequest("POST", "/api/ai/chat", payload);
+  return response.json();
+}
+
+// New API functions for BookLending
+export async function fetchMyActiveLendings(): Promise<BookLending[]> {
+  const response = await apiRequest("GET", "/api/book-lendings/my-active");
+  return response.json();
+}
+
+export async function fetchMyActiveLendingsCount(): Promise<number> {
+  const response = await apiRequest("GET", "/api/book-lendings/my-active/count");
+  const count = await response.json(); // Assuming backend returns a simple number for count
+  return Number(count); // Ensure it's a number
+}
+
+export async function fetchMyTotalLendingsCount(): Promise<number> {
+  const response = await apiRequest("GET", "/api/book-lendings/my-total/count");
+  const count = await response.json();
+  return Number(count);
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

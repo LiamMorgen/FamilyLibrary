@@ -25,4 +25,9 @@ jwt:
 logging:
   level:
     org.springframework.security: DEBUG
-    com.familylibrary: DEBUG 
+    com.familylibrary: DEBUG
+
+deepseek:
+  api:
+    key: sk-ee33a1b951a7456690267e15ea702b13
+    # deepseek.api.url=https://api.deepseek.com/chat/completions (可选，如果URL不同) 

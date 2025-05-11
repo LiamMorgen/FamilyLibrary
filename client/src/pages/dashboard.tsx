@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -12,122 +12,170 @@ import ActivityFeed from "@/components/activity-feed";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsContent, TabsTrigger } from "@/components/ui/tabs";
 // @ts-ignore
-import type { Book, Activity, User, ShelfPosition, Bookshelf } from "@/lib/types";
-import { apiRequest } from "@/lib/queryClient";
+import type { Book, Activity, User, ShelfPosition, Bookshelf, AIMessage, AIQuery, InitialAIAnalysisResponse, BookLending } from "@/lib/types";
+import { apiRequest, fetchInitialAIAnalysis, postAIChatMessage, fetchMyActiveLendings, fetchMyActiveLendingsCount } from "@/lib/queryClient";
 import { formatDate, getBookCoverPlaceholder } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  
+  // AI Chat State
+  const [isAIAnalysisLoading, setIsAIAnalysisLoading] = useState(true); 
+  // @ts-ignore
+  const [aiAnalysisError, setAIAnalysisError] = useState<string | null>(null); 
+  const [chatHistory, setChatHistory] = useState<AIMessage[]>([
+    { role: "assistant", content: t('dashboard.aiChatInitialWelcome', 'AI助手正在启动，请稍候...') }
+  ]);
+  const [userChatInput, setUserChatInput] = useState("");
+  const [isAIChatLoading, setIsAIChatLoading] = useState(false); 
+  const chatScrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Initialize sample data if first time
-  useEffect(() => {
-    const initSampleData = async () => {
-      try {
-        await apiRequest("POST", "/api/init-sample-data", {});
-      } catch (error) {
-        console.error("Failed to initialize sample data:", error);
-      }
-    };
-
-    initSampleData();
-  }, []);
-
-  // Fetch current user
+  // Data Fetching Hooks
   const { data: currentUser } = useQuery<User>({
     queryKey: ['/api/users/current'],
   });
 
-  // Fetch all bookshelves
   // @ts-ignore
-  const { data: allBookshelves, isLoading: isLoadingAllBookshelves } = useQuery<Bookshelf[]>({
-    queryKey: ['/api/bookshelves'],
+  const { data: allBookshelves, isLoading: isLoadingAllBookshelves } = useQuery<Bookshelf[]>({ 
+    queryKey: ['/api/bookshelves'], 
+    enabled: !!currentUser 
+  });
+  const { data: personalBookshelves, isLoading: isLoadingPersonalBookshelves } = useQuery<Bookshelf[]>({ 
+    queryKey: ['/api/bookshelves/owner/current'], 
+    enabled: !!currentUser 
+  });
+  const { data: familyBookshelves, isLoading: isLoadingFamilyBookshelves } = useQuery<Bookshelf[]>({ 
+    queryKey: ['/api/bookshelves/family/current'], 
+    enabled: !!currentUser 
+  });
+  const { data: allBooks, isLoading: isLoadingBooks } = useQuery<Book[]>({ 
+    queryKey: ['/api/books'], 
+    enabled: !!currentUser 
+  });
+  const { data: activities, isLoading: isLoadingActivities } = useQuery<Activity[]>({ 
+    queryKey: ['/api/activities', { limit: 5 }], 
+    enabled: !!currentUser 
+  });
+  const { data: recentBooks, isLoading: isLoadingRecentBooks } = useQuery<Book[]>({ 
+    queryKey: ['/api/books', { limit: 4, sort: 'addedDate_desc' }],
+    enabled: !!currentUser
+  });
+  const { data: myActiveLendings, isLoading: isLoadingMyActiveLendings } = useQuery<BookLending[]>({
+    queryKey: ['/api/book-lendings/my-active'],
+    queryFn: fetchMyActiveLendings,
+    enabled: !!currentUser,
+  });
+  const { data: myActiveLendingsCount, isLoading: isLoadingMyActiveLendingsCount } = useQuery<number>({
+    queryKey: ['/api/book-lendings/my-active/count'],
+    queryFn: fetchMyActiveLendingsCount,
+    enabled: !!currentUser,
   });
 
-  // Fetch personal bookshelves
-  const { data: personalBookshelves, isLoading: isLoadingPersonalBookshelves } = useQuery<Bookshelf[]>({
-    queryKey: ['/api/bookshelves/owner/current'],
-  });
-
-  // Fetch family bookshelves
-  const { data: familyBookshelves, isLoading: isLoadingFamilyBookshelves } = useQuery<Bookshelf[]>({
-    queryKey: ['/api/bookshelves/family/current'],
-  });
-
-  // Fetch books for all bookshelves
-  const { data: allBooks, isLoading: isLoadingBooks } = useQuery<Book[]>({
-    queryKey: ['/api/books'],
-  });
-
-  // Fetch recent activities
-  const { data: activities, isLoading: isLoadingActivities } = useQuery<Activity[]>({
-    queryKey: ['/api/activities', { limit: 5 }],
-  });
-
-  // Fetch recent books - 只保留最近4本书
-  const { data: recentBooks, isLoading: isLoadingRecentBooks } = useQuery<Book[]>({
-    queryKey: ['/api/books', { limit: 4, sort: 'addedDate_desc' }], // 按添加日期排序，最新添加的排在前面
-  });
-
-  // 处理后端返回的数据，确保addedById字段存在
-  const processedBooks = allBooks?.map(book => ({
-    ...book,
-    // 如果addedById不存在但addedBy存在，则从addedBy中提取ID，否则提供默认值0
-    addedById: book.addedById || book.addedBy?.id || 0,
-    // 确保coverImage字段存在
-    coverImage: book.coverImage || book.coverImageUrl
-  })) || [];
-
-  console.log("处理后的书籍数据:", processedBooks);
-
-  // 按照书架ID对书籍进行分组 - 使用处理后的数据
-  const booksByBookshelfId = processedBooks.reduce((acc, book) => {
-    if (!acc[book.bookshelfId]) {
-      acc[book.bookshelfId] = [];
+  // useEffect for sample data init (runs once)
+  useEffect(() => {
+    const initSampleData = async () => {
+      try { await apiRequest("POST", "/api/init-sample-data", {}); }
+      catch (error) { console.error("Failed to initialize sample data:", error); }
+    };
+    if (currentUser) { // Only init sample data if a user is identified, to avoid potential issues
+        initSampleData();
     }
-    acc[book.bookshelfId].push(book);
-    return acc;
-  }, {} as Record<number, Book[]>);
+  }, [currentUser]); // Depend on currentUser to ensure it runs after user context is available
 
-  // 在dashboard.tsx中添加调试信息
-  console.log("当前用户ID:", currentUser?.id);
-  console.log("个人书架:", personalBookshelves);
-  console.log("所有书籍:", allBooks);
+  // useEffect for Initial AI Chat Message
+  useEffect(() => {
+    let newOpeningMessage: AIMessage; // Declare here to ensure it's in scope for finally block
+    const fetchAndSetAnalysis = async () => {
+      if (!currentUser) return; // Don't fetch if no user
+      setIsAIAnalysisLoading(true);
+      setAIAnalysisError(null);
+      try {
+        const analysisData: InitialAIAnalysisResponse = await fetchInitialAIAnalysis();
+        if (analysisData && analysisData.analysisText) {
+          newOpeningMessage = { role: "assistant", content: analysisData.analysisText };
+        } else {
+          newOpeningMessage = { role: "assistant", content: t('dashboard.aiDefaultWelcome', '你好！开始您的阅读对话吧。') };
+        }
+      } catch (error: any) {
+        console.error("Failed to fetch initial AI analysis for chat:", error);
+        setAIAnalysisError(error.message || "获取AI分析失败，请稍后重试。");
+        newOpeningMessage = { role: "assistant", content: t('dashboard.aiChatErrorFallback', '抱歉，AI助手初始化失败，您可以直接开始提问。') };
+      } finally {
+        setIsAIAnalysisLoading(false);
+        setChatHistory([newOpeningMessage]); 
+      }
+    };
+    const timer = setTimeout(() => { fetchAndSetAnalysis(); }, 700);
+    return () => clearTimeout(timer); 
+  }, [currentUser, t]); // Add t to dependency array of useEffect if it's used inside
 
-  // 显示一本书的完整属性以检查字段名
-  console.log("第一本书的完整属性:", allBooks?.[0]);
+  // useEffect to scroll chat
+  useEffect(() => {
+    if (chatScrollAreaRef.current) {
+      chatScrollAreaRef.current.scrollTo({ top: chatScrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [chatHistory]);
 
-  // 增强过滤逻辑，添加更多调试信息
-  const personalBooks = processedBooks.filter(book => {
-    console.log("书籍信息:", {
-      title: book.title,
-      addedById: book.addedById,
-      currentUserId: currentUser?.id
-    });
-    
-    // 检查当前登录用户ID与书籍的addedById是否匹配
-    const isUserBook = book.addedById === currentUser?.id;
-    console.log(`${book.title} 是否为当前用户书籍: ${isUserBook}`);
-    return isUserBook;
-  });
+  // Processed Books (Memoized)
+  const processedBooks = useMemo(() => 
+    allBooks?.map(book => ({
+      ...book,
+      addedById: book.addedById || book.addedBy?.id || 0,
+      coverImage: book.coverImage || book.coverImageUrl
+    })) || [],
+  [allBooks]);
 
-  console.log("统计的个人书籍:", personalBooks.length, personalBooks);
+  const booksByBookshelfId = useMemo(() => 
+    processedBooks.reduce((acc, book) => {
+      if (!acc[book.bookshelfId]) acc[book.bookshelfId] = [];
+      acc[book.bookshelfId].push(book);
+      return acc;
+    }, {} as Record<number, Book[]>),
+  [processedBooks]);
   
-  const totalBooks = personalBooks.length;
-  const readingBooks = personalBooks.filter(b => b.status === 'reading').length;
-  const borrowedBooks = personalBooks.filter(b => b.status === 'borrowed').length;
-  
-  // 获取待归还的书籍（借出且已过期的书籍）
-  const pendingReturnBooks = personalBooks.filter(book => {
-    // 检查借阅状态并获取过期日期（如果存在）
-    return book.status === 'borrowed' && 
-           ((book as any).dueDate && new Date((book as any).dueDate) < new Date());
-  }).length || 0;
+  const personalBooks = useMemo(() => 
+    processedBooks.filter(book => book.addedById === currentUser?.id), 
+  [processedBooks, currentUser]);
 
-  // 处理加载中和错误状态
+  // Stats Calculation (Memoized)
+  const totalBooks = useMemo(() => personalBooks.length, [personalBooks]);
+  const readingBooks = useMemo(() => personalBooks.filter(b => b.status === 'reading').length, [personalBooks]);
+  const borrowedBooks = useMemo(() => myActiveLendingsCount || 0, [myActiveLendingsCount]);
+  const pendingReturnBooks = useMemo(() => {
+    if (!myActiveLendings) return 0;
+    const now = new Date();
+    return myActiveLendings.filter(lending => 
+      lending.status === 'BORROWED' && lending.dueDate && new Date(lending.dueDate) < now
+    ).length;
+  }, [myActiveLendings]);
+
+  // Chat Handler
+  const handleSendChatMessage = async () => {
+    if (!userChatInput.trim()) return;
+    const newUserMessage: AIMessage = { role: "user", content: userChatInput.trim() };
+    setChatHistory(prev => [...prev, newUserMessage]);
+    const currentInput = userChatInput.trim();
+    setUserChatInput("");
+    setIsAIChatLoading(true);
+    const payload: AIQuery = { query: currentInput, history: chatHistory.slice(-10) };
+    try {
+      const aiResponse = await postAIChatMessage(payload);
+      setChatHistory(prev => [...prev, aiResponse]);
+    } catch (error: any) {
+      console.error("Failed to send chat message or get AI response:", error);
+      setChatHistory(prev => [...prev, { role: "assistant", content: t('dashboard.aiChatError', '抱歉，AI对话暂时遇到问题。') }]);
+    } finally {
+      setIsAIChatLoading(false);
+    }
+  };
+  
+  // Overall Loading State
   // @ts-ignore
-  const isLoading = isLoadingAllBookshelves || isLoadingBooks || isLoadingRecentBooks || isLoadingActivities;
+  const isLoading = isLoadingAllBookshelves || isLoadingBooks || isLoadingRecentBooks || isLoadingActivities || isLoadingMyActiveLendings || isLoadingMyActiveLendingsCount || isAIAnalysisLoading;
 
-  // 获取书架的前5本书
+  // JSX Render function for bookshelves (as before)
   const getPreviewBooks = (bookshelfId: number) => {
     const books = booksByBookshelfId[bookshelfId] || [];
     return books.slice(0, 5);
@@ -142,8 +190,8 @@ export default function Dashboard() {
   const renderBookshelf = (bookshelf: Bookshelf) => {
     const previewBooks = getPreviewBooks(bookshelf.id);
     const viewAllLink = handleViewAll(bookshelf);
-    
-    return (
+
+  return (
       <div key={bookshelf.id} className="mb-6">
         <div className="flex justify-between items-center mb-2">
           <h3 className="font-medium text-lg">{bookshelf.name} ({bookshelf.familyId ? t('bookshelves.family') : t('bookshelves.personal')})</h3>
@@ -184,7 +232,7 @@ export default function Dashboard() {
                 <p className="text-gray-500 mb-4">{t('dashboard.noBooks', '书架暂无书籍')}</p>
                 <Link href={`/add-book?bookshelfId=${bookshelf.id}&source=${bookshelf.familyId ? 'family-bookshelf' : 'my-bookshelf'}`}>
                   <Button size="sm">
-                    <i className="fas fa-plus mr-2"></i>
+              <i className="fas fa-plus mr-2"></i>
                     {t('dashboard.addFirstBook')}
                   </Button>
                 </Link>
@@ -200,16 +248,22 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-500">{t('dashboard.addBook')}</p>
                   </div>
                 </div>
-              </Link>
+            </Link>
             )}
           </div>
         )}
-      </div>
+        </div>
     );
   };
 
-  // 在后续代码中添加强制执行的检查
-  console.log("所有书籍是否加载:", !!allBooks, "书籍数量:", allBooks?.length || 0);
+  // Debug Logs (keep them for now if helpful)
+  console.log("Current User ID:", currentUser?.id);
+  console.log("Personal Bookshelves:", personalBookshelves);
+  console.log("All Books raw:", allBooks);
+  console.log("Processed Books:", processedBooks);
+  console.log("Personal Books (filtered):", personalBooks);
+  console.log("My Active Lendings:", myActiveLendings);
+  console.log("My Active Lendings Count:", myActiveLendingsCount);
 
   return (
     <div className="container mx-auto p-4">
@@ -217,7 +271,7 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold mb-2">{t('dashboard.welcome', { name: currentUser?.username || '' })}</h1>
         <p className="text-gray-500">{t('dashboard.todayDate', { date: formatDate(new Date()) })}</p>
       </div>
-      
+
       {/* 统计卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -301,12 +355,12 @@ export default function Dashboard() {
                       <Link href="/family-bookshelf">
                         <Button>{t('dashboard.createFamilyBookshelf')}</Button>
                       </Link>
-                    </div>
+          </div>
                   ) : (
                     <div className="space-y-6">
                       {familyBookshelves.map(renderBookshelf)}
-                    </div>
-                  )}
+          </div>
+        )}
                 </TabsContent>
                 
                 <TabsContent value="personal">
@@ -317,7 +371,7 @@ export default function Dashboard() {
                       <p className="text-gray-500 mb-4">{t('dashboard.noPersonalBookshelves')}</p>
                       <Link href="/my-bookshelf">
                         <Button>{t('dashboard.createPersonalBookshelf')}</Button>
-                      </Link>
+            </Link>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -328,10 +382,70 @@ export default function Dashboard() {
               </Tabs>
             </CardContent>
           </Card>
-        </div>
-        
-        {/* 右侧部分：最近添加的书和活动日志 */}
-        <div className="lg:w-1/3">
+          </div>
+          
+        {/* 右侧部分：AI聊天、最近添加的书和活动日志 */}
+        <div className="lg:w-1/3 space-y-6">
+          {/* AI Chat Section */}
+          <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 bg-white">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-md font-semibold text-gray-800 flex items-center">
+                <i className="fas fa-comments mr-2 text-blue-600"></i>
+                {t('dashboard.aiChatTitle', '与AI聊聊您的阅读')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-64 pr-3 mb-3" ref={chatScrollAreaRef}>
+                <div className="space-y-3">
+                  {chatHistory.map((msg, index) => (
+                    <div 
+                      key={index} 
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div 
+                        className={`max-w-[80%] p-2.5 rounded-lg text-sm leading-relaxed 
+                                    ${msg.role === 'user' 
+                                      ? 'bg-blue-600 text-white rounded-br-none' 
+                                      : 'bg-gray-100 text-gray-800 rounded-bl-none'}
+                                    ${msg.role === 'assistant' && msg.content.includes('抱歉') ? 'border border-red-300 bg-red-50' : ''}
+                                    `}
+                      >
+                        {msg.content.split('\n').map((paragraph, pIndex) => (
+                          <p key={pIndex} className={pIndex > 0 ? "mt-1" : ""}>{paragraph}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {isAIChatLoading && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] p-2.5 rounded-lg text-sm bg-gray-100 text-gray-800 rounded-bl-none flex items-center">
+                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                        {t('dashboard.aiThinking', 'AI思考中...')}
+                      </div>
+                    </div>
+                  )}
+                  </div>
+              </ScrollArea>
+              <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                <Textarea 
+                  placeholder={t('dashboard.aiChatPlaceholder', '输入您想说的...')}
+                  value={userChatInput}
+                  onChange={(e) => setUserChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendChatMessage();
+                    }
+                  }}
+                  className="flex-grow resize-none h-12 text-sm p-2 border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  rows={1}
+                />
+                <Button onClick={handleSendChatMessage} disabled={isAIChatLoading || !userChatInput.trim()} className="h-12 px-4">
+                  {isAIChatLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 最近添加的书籍 */}
           <Card className="mb-6">
             <CardHeader>
@@ -370,11 +484,11 @@ export default function Dashboard() {
                           <h4 className="text-sm font-medium text-gray-900 truncate">{book.title}</h4>
                           <p className="text-xs text-gray-500">{book.author}</p>
                           <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(book.addedDate))}</p>
-                        </div>
-                      </div>
+          </div>
+        </div>
                     </Link>
                   ))}
-                </div>
+          </div>
               )}
             </CardContent>
           </Card>

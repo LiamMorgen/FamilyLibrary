@@ -18,22 +18,35 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/utils";
+import { fetchMyActiveLendingsCount, fetchMyTotalLendingsCount } from "@/lib/queryClient";
 
 export default function ReadingStats() {
   const { t } = useTranslation();
 
-  // Fetch current user's reading history
+  // Fetch current user's reading history (remains for detailed history list)
   const { data: readingHistory, isLoading: isLoadingHistory } = useQuery<ReadingHistory[]>({
-    queryKey: ['/api/reading-history', { userId: 'current' }],
+    queryKey: ['/api/reading-history', { userId: 'current' }], // This endpoint might need review based on new stats definition
   });
 
-  // Fetch all books for reference
-  const { data: allBooks } = useQuery<Book[]>({
+  // Fetch "Currently Reading" count (active lendings)
+  const { data: currentlyReadingCount, isLoading: isLoadingCurrentlyReading } = useQuery<number>({
+    queryKey: ['/api/book-lendings/my-active/count'],
+    queryFn: fetchMyActiveLendingsCount,
+  });
+
+  // Fetch "Total Read" count (total lendings by current user)
+  const { data: totalReadCount, isLoading: isLoadingTotalRead } = useQuery<number>({
+    queryKey: ['/api/book-lendings/my-total/count'],
+    queryFn: fetchMyTotalLendingsCount,
+  });
+
+  // Fetch all books for reference (if still needed for category chart or history list)
+  const { data: allBooks, isLoading: isLoadingAllBooks } = useQuery<Book[]>({
     queryKey: ['/api/books'],
   });
 
-  // Fetch family members for comparison
-  const { data: familyMembers } = useQuery<User[]>({
+  // Fetch family members for comparison (if family comparison chart is kept)
+  const { data: familyMembers, isLoading: isLoadingFamilyMembers } = useQuery<User[]>({
     queryKey: ['/api/families/current/users'],
   });
 
@@ -105,18 +118,21 @@ export default function ReadingStats() {
   // Chart colors based on theme
   const CHART_COLORS = ['#1B4965', '#62B6CB', '#BEE9E8', '#547DA6', '#3D7EA6'];
 
+  // @ts-ignore
+  const overallIsLoading = isLoadingHistory || isLoadingCurrentlyReading || isLoadingTotalRead || isLoadingAllBooks || isLoadingFamilyMembers;
+
   return (
     <div>
       <h1 className="font-heading text-2xl font-bold text-primary mb-6">{t('readingStats.title')}</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <Card>
           <CardContent className="p-4 flex flex-col items-center justify-center h-32">
             <h3 className="text-sm text-gray-500 mb-1">{t('readingStats.totalRead')}</h3>
-            {isLoadingHistory ? (
+            {isLoadingTotalRead ? (
               <Skeleton className="h-10 w-16" />
             ) : (
-              <p className="text-4xl font-bold text-primary">{readingHistory?.length || 0}</p>
+              <p className="text-4xl font-bold text-primary">{totalReadCount || 0}</p>
             )}
           </CardContent>
         </Card>
@@ -124,27 +140,11 @@ export default function ReadingStats() {
         <Card>
           <CardContent className="p-4 flex flex-col items-center justify-center h-32">
             <h3 className="text-sm text-gray-500 mb-1">{t('readingStats.currentlyReading')}</h3>
-            {isLoadingHistory ? (
+            {isLoadingCurrentlyReading ? (
               <Skeleton className="h-10 w-16" />
             ) : (
               <p className="text-4xl font-bold text-secondary">
-                {readingHistory?.filter(h => !h.endDate).length || 0}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="p-4 flex flex-col items-center justify-center h-32">
-            <h3 className="text-sm text-gray-500 mb-1">{t('readingStats.averageRating')}</h3>
-            {isLoadingHistory ? (
-              <Skeleton className="h-10 w-16" />
-            ) : (
-              <p className="text-4xl font-bold text-accent">
-                {readingHistory && readingHistory.filter(h => h.rating).length > 0 
-                  ? (readingHistory.reduce((sum, h) => sum + (h.rating || 0), 0) / 
-                    readingHistory.filter(h => h.rating).length).toFixed(1)
-                  : "N/A"}
+                {currentlyReadingCount || 0}
               </p>
             )}
           </CardContent>

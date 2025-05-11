@@ -15,8 +15,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -27,37 +29,71 @@ public class BookLendingService {
     private final BookLendingRepository bookLendingRepository;
     private final UserRepository userRepository;
     private final BookRepository bookRepository;
-    // private final UserService userService; // May be needed for 'current' user resolution
+    private final UserService userService;
 
     @Transactional(readOnly = true)
     public List<BookLendingDto> getBookLendings(String lenderIdStr, String borrowerIdStr, Long bookId) {
-        Long currentActualUserId = getCurrentUserId(); // Helper to get current user's ID
+        User currentUser = userService.getCurrentUser();
+        Long currentActualUserId = (currentUser != null) ? currentUser.getId() : null;
+        
         Long lenderId = resolveUserId(lenderIdStr, currentActualUserId);
         Long borrowerId = resolveUserId(borrowerIdStr, currentActualUserId);
 
         // TODO: Implement sophisticated filtering in repository based on combinations of these IDs
         // For now, a simple approach:
         if (lenderId != null) {
-            User lender = userRepository.findById(lenderId).orElseThrow(() -> new EntityNotFoundException("Lender not found"));
-            return bookLendingRepository.findByLender(lender).stream().map(this::convertToDto).collect(Collectors.toList());
+            User lender = userService.findById(lenderId);
+            if (lender == null) throw new EntityNotFoundException("Lender not found");
+            return bookLendingRepository.findByLender(lender).stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
         }
         if (borrowerId != null) {
-            User borrower = userRepository.findById(borrowerId).orElseThrow(() -> new EntityNotFoundException("Borrower not found"));
-            return bookLendingRepository.findByBorrower(borrower).stream().map(this::convertToDto).collect(Collectors.toList());
+            User borrower = userService.findById(borrowerId);
+            if (borrower == null) throw new EntityNotFoundException("Borrower not found");
+            return bookLendingRepository.findByBorrower(borrower).stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
         }
         if (bookId != null) {
             Book book = bookRepository.findById(bookId).orElseThrow(() -> new EntityNotFoundException("Book not found"));
-            return bookLendingRepository.findByBook(book).stream().map(this::convertToDto).collect(Collectors.toList());
+            return bookLendingRepository.findByBook(book).stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
         }
-        return bookLendingRepository.findAll().stream().map(this::convertToDto).collect(Collectors.toList());
+        return bookLendingRepository.findAll().stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<BookLendingDto> getMyActiveLendings() {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            return Collections.emptyList(); // Or throw an exception if user must be authenticated
+        }
+        List<BookLending> lendings = bookLendingRepository.findByBorrowerAndStatus(currentUser, LendingStatus.BORROWED);
+        return lendings.stream().map(this::convertToDtoWithDetails).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public long countMyActiveLendings() {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            return 0;
+        }
+        return bookLendingRepository.countByBorrowerAndStatus(currentUser, LendingStatus.BORROWED);
+    }
+
+    @Transactional(readOnly = true)
+    public long countTotalLendingsForCurrentUser() {
+        User currentUser = userService.getCurrentUser();
+        if (currentUser == null) {
+            return 0;
+        }
+        return bookLendingRepository.countByBorrower(currentUser);
     }
 
     @Transactional
     public BookLendingDto createBookLending(BookLendingDto dto) {
-        User lender = userRepository.findById(dto.getLenderId())
-                .orElseThrow(() -> new EntityNotFoundException("Lender not found with id: " + dto.getLenderId()));
-        User borrower = userRepository.findById(dto.getBorrowerId())
-                .orElseThrow(() -> new EntityNotFoundException("Borrower not found with id: " + dto.getBorrowerId()));
+        User lender = userService.findById(dto.getLenderId());
+        if (lender == null) throw new EntityNotFoundException("Lender not found with id: " + dto.getLenderId());
+        
+        User borrower = userService.findById(dto.getBorrowerId());
+        if (borrower == null) throw new EntityNotFoundException("Borrower not found with id: " + dto.getBorrowerId());
+
         Book book = bookRepository.findById(dto.getBookId())
                 .orElseThrow(() -> new EntityNotFoundException("Book not found with id: " + dto.getBookId()));
 
@@ -78,7 +114,7 @@ public class BookLendingService {
         book.setStatus(BookStatus.BORROWED);
         bookRepository.save(book);
 
-        return convertToDto(savedLending);
+        return convertToDtoWithDetails(savedLending);
     }
 
     @Transactional
@@ -98,41 +134,30 @@ public class BookLendingService {
         book.setStatus(BookStatus.AVAILABLE);
         bookRepository.save(book);
 
-        return convertToDto(updatedLending);
-    }
-
-    private Long getCurrentUserId() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        String username;
-        if (principal instanceof UserDetails) {
-            username = ((UserDetails) principal).getUsername();
-        } else {
-            username = principal.toString();
-        }
-        User user = userRepository.findByUsername(username)
-                .orElse(null); // Or throw if user must exist
-        return user != null ? user.getId() : null;
+        return convertToDtoWithDetails(updatedLending);
     }
 
     private Long resolveUserId(String userIdStr, Long currentActualUserId) {
-        if (userIdStr == null) return null;
-        if ("current".equalsIgnoreCase(userIdStr)) {
+        if (userIdStr == null || userIdStr.trim().isEmpty()) return null;
+        if ("current".equalsIgnoreCase(userIdStr.trim())) {
+            if (currentActualUserId == null) {
+                throw new IllegalStateException("Cannot resolve 'current' user ID without an authenticated user.");
+            }
             return currentActualUserId;
         }
         try {
-            return Long.parseLong(userIdStr);
+            return Long.parseLong(userIdStr.trim());
         } catch (NumberFormatException e) {
-            // Log error or handle invalid ID format
             throw new IllegalArgumentException("Invalid user ID format: " + userIdStr);
         }
     }
 
-    private BookLendingDto convertToDto(BookLending lending) {
+    private BookLendingDto convertToDtoWithDetails(BookLending lending) {
         BookLendingDto dto = new BookLendingDto();
         dto.setId(lending.getId());
         if (lending.getLender() != null) {
             dto.setLenderId(lending.getLender().getId());
-            dto.setLenderName(lending.getLender().getDisplayName()); // Assuming User has getDisplayName
+            dto.setLenderName(lending.getLender().getDisplayName());
         }
         if (lending.getBorrower() != null) {
             dto.setBorrowerId(lending.getBorrower().getId());
@@ -140,8 +165,8 @@ public class BookLendingService {
         }
         if (lending.getBook() != null) {
             dto.setBookId(lending.getBook().getId());
-            dto.setBookTitle(lending.getBook().getTitle()); // Assuming Book has getTitle
-            dto.setBookCoverImage(lending.getBook().getCoverImage());
+            dto.setBookTitle(lending.getBook().getTitle());
+            dto.setBookCoverImage(lending.getBook().getCoverImage() != null ? lending.getBook().getCoverImage() : lending.getBook().getCoverImageUrl());
         }
         dto.setLendDate(lending.getLendDate());
         dto.setDueDate(lending.getDueDate());

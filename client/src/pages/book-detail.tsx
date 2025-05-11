@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, getBookCoverPlaceholder } from "@/lib/utils";
+import type { User, BookLending } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 // 书籍类型定义
 interface BookDetail {
@@ -31,38 +33,97 @@ interface BookDetail {
   addedBy: {
     id: number;
     username: string;
+    displayName?: string;
   };
   totalPages: number | null;
   language: string | null;
   coverImage?: string;
+  currentLendingId?: number;
+  currentBorrower?: {
+    id: number;
+  };
 }
 
 export default function BookDetailPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { bookId } = useParams<{ bookId: string }>(); // 从URL获取书籍ID
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { bookId } = useParams<{ bookId: string }>();
 
-  // 获取书籍详情
-  const { data: book, isLoading, error } = useQuery<BookDetail, Error>({
+  const { data: currentUser } = useQuery<User>({ queryKey: ['/api/users/current'] });
+
+  // @ts-ignore
+  const { data: book, isLoading, error, refetch: refetchBookDetails } = useQuery<BookDetail, Error>({
     queryKey: ['/api/books', bookId],
     queryFn: async () => {
       if (!bookId) throw new Error('Book ID is required');
       const response = await apiRequest('GET', `/api/books/${bookId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch book details');
-      }
+      if (!response.ok) throw new Error('Failed to fetch book details');
       return response.json();
     },
     enabled: !!bookId,
   });
 
+  const borrowMutation = useMutation<BookLending, Error, { bookId: number; lenderId: number; borrowerId: number; dueDate?: string }>({
+    mutationFn: async (newLending) => {
+      const response = await apiRequest("POST", "/api/book-lendings", newLending);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: t('bookDetail.borrowSuccessTitle'), description: t('bookDetail.borrowSuccessDesc') });
+      queryClient.invalidateQueries({ queryKey: ['/api/books', bookId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/book-lendings/my-active'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/book-lendings/my-active/count'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+    },
+    onError: (error) => {
+      toast({ title: t('bookDetail.borrowErrorTitle'), description: error.message || t('bookDetail.borrowErrorDesc'), variant: "destructive" });
+    },
+  });
+
+  const returnMutation = useMutation<BookLending, Error, { lendingId: number }>({
+    mutationFn: async ({ lendingId }) => {
+      const response = await apiRequest("PATCH", `/api/book-lendings/${lendingId}/return`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: t('bookDetail.returnSuccessTitle'), description: t('bookDetail.returnSuccessDesc') });
+      queryClient.invalidateQueries({ queryKey: ['/api/books', bookId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/book-lendings/my-active'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/book-lendings/my-active/count'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+    },
+    onError: (error) => {
+      toast({ title: t('bookDetail.returnErrorTitle'), description: error.message || t('bookDetail.returnErrorDesc'), variant: "destructive" });
+    },
+  });
+
+  const handleBorrowBook = () => {
+    if (!book || !currentUser || !book.addedBy) return;
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 14);
+
+    borrowMutation.mutate({
+      bookId: book.id,
+      lenderId: book.addedBy.id,
+      borrowerId: currentUser.id,
+      dueDate: dueDate.toISOString(),
+    });
+  };
+
+  const handleReturnBook = () => {
+    if (!book || !book.currentLendingId) return;
+    returnMutation.mutate({ lendingId: book.currentLendingId });
+  };
+  
   // 如果API尚未实现，这里添加一个模拟数据
   const [mockBook, setMockBook] = useState<BookDetail | null>(null);
   
   useEffect(() => {
     // 如果API调用失败（API可能未实现），使用模拟数据
-    if (error && bookId) {
-      console.warn("API调用失败，使用模拟数据", error);
+    if (error && bookId && !book) {
+      console.warn("API调用失败，使用模拟数据 for book detail", error);
       setMockBook({
         id: parseInt(bookId),
         title: "示例书名",
@@ -89,10 +150,21 @@ export default function BookDetailPage() {
         language: "中文",
       });
     }
-  }, [error, bookId]);
+  }, [error, bookId, book]);
 
   // 获取要显示的书籍（API数据或模拟数据）
   const displayBook = book || mockBook;
+
+  // Determine if the borrow button should be shown
+  const canBorrow = displayBook && 
+                    currentUser && 
+                    displayBook.status === 'available' && 
+                    displayBook.addedBy?.id !== currentUser.id;
+
+  const canReturn = displayBook && currentUser && 
+                    displayBook.status === 'BORROWED' && // Status from backend for Book
+                    displayBook.currentLendingId && 
+                    displayBook.currentBorrower?.id === currentUser.id;
 
   if (isLoading) {
     return (
@@ -240,15 +312,30 @@ export default function BookDetailPage() {
                 )}
               </div>
               
-              <div className="border-t pt-4 mt-4">
-                <div className="flex justify-between">
-                  <Button variant="outline">
+              <div className="border-t pt-4 mt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <Button variant="outline" onClick={() => alert('Edit action placeholder')} disabled={borrowMutation.isPending || returnMutation.isPending}>
                     <i className="fas fa-edit mr-2"></i>
-                    {t('bookDetail.edit', { defaultValue: '编辑' })}
+                    {t('bookDetail.edit')}
                   </Button>
-                  <Button variant="outline" className="text-red-500 hover:text-red-700">
+
+                  {canBorrow && (
+                    <Button onClick={handleBorrowBook} disabled={borrowMutation.isPending}>
+                      <i className={`fas ${borrowMutation.isPending ? 'fa-spinner fa-spin' : 'fa-hand-holding-heart'} mr-2`}></i>
+                      {borrowMutation.isPending ? t('bookDetail.borrowing') : t('bookDetail.borrow')}
+                    </Button>
+                  )}
+
+                  {canReturn && (
+                    <Button onClick={handleReturnBook} disabled={returnMutation.isPending} variant="secondary">
+                      <i className={`fas ${returnMutation.isPending ? 'fa-spinner fa-spin' : 'fa-undo-alt'} mr-2`}></i>
+                      {returnMutation.isPending ? t('bookDetail.returning') : t('bookDetail.return')}
+                    </Button>
+                  )}
+                  
+                  <Button variant="outline" className="text-red-500 hover:text-red-700" onClick={() => alert('Delete action placeholder')} disabled={borrowMutation.isPending || returnMutation.isPending}>
                     <i className="fas fa-trash mr-2"></i>
-                    {t('bookDetail.delete', { defaultValue: '删除' })}
+                    {t('bookDetail.delete')}
                   </Button>
                 </div>
               </div>
