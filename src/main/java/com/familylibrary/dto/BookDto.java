@@ -23,6 +23,7 @@ public class BookDto {
     private String status; // e.g., available, borrowed, reading
     private Long bookshelfId; // To know which bookshelf it belongs to
     private String bookshelfName; // Optional: denormalized for convenience
+    private String familyName; // Added for displaying the family name
     private ShelfPositionDto shelfPosition; // Added
     private LocalDateTime addedDate;
     private UserDto addedBy; // Who added the book (simplified to UserDto)

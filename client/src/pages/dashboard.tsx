@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // @ts-ignore
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [userChatInput, setUserChatInput] = useState("");
   const [isAIChatLoading, setIsAIChatLoading] = useState(false); 
   const chatScrollAreaRef = useRef<HTMLDivElement>(null);
+  const [showAllRecentBooks, setShowAllRecentBooks] = useState(false); // State for recent books toggle
 
   // Data Fetching Hooks
   const { data: currentUser } = useQuery<User>({
@@ -58,8 +59,8 @@ export default function Dashboard() {
     queryKey: ['/api/activities', { limit: 5 }], 
     enabled: !!currentUser 
   });
-  const { data: recentBooks, isLoading: isLoadingRecentBooks } = useQuery<Book[]>({ 
-    queryKey: ['/api/books', { limit: 4, sort: 'addedDate_desc' }],
+  const { data: allRecentBooks, isLoading: isLoadingRecentBooks } = useQuery<Book[]>({
+    queryKey: ['/api/books', { limit: 15, sort: 'addedDate_desc' }], // Fetch more for potential expansion
     enabled: !!currentUser
   });
   const { data: myActiveLendings, isLoading: isLoadingMyActiveLendings } = useQuery<BookLending[]>({
@@ -151,6 +152,13 @@ export default function Dashboard() {
     ).length;
   }, [myActiveLendings]);
 
+  // Fetch recent books - Now explicitly fetch more initially if needed, or rely on a separate "view all" page/modal
+  // For this implementation, we'll fetch a decent number and slice for preview.
+  const recentBooksToShow = useMemo(() => {
+    if (!allRecentBooks) return [];
+    return showAllRecentBooks ? allRecentBooks : allRecentBooks.slice(0, 5);
+  }, [allRecentBooks, showAllRecentBooks]);
+
   // Chat Handler
   const handleSendChatMessage = async () => {
     if (!userChatInput.trim()) return;
@@ -191,11 +199,11 @@ export default function Dashboard() {
     const previewBooks = getPreviewBooks(bookshelf.id);
     const viewAllLink = handleViewAll(bookshelf);
 
-  return (
+    return (
       <div key={bookshelf.id} className="mb-6">
         <div className="flex justify-between items-center mb-2">
           <h3 className="font-medium text-lg">{bookshelf.name} ({bookshelf.familyId ? t('bookshelves.family') : t('bookshelves.personal')})</h3>
-          <Link href={viewAllLink}>
+          <Link to={viewAllLink}>
             <Button variant="ghost" size="sm">{t('dashboard.viewAll')}</Button>
           </Link>
         </div>
@@ -203,56 +211,65 @@ export default function Dashboard() {
         {isLoadingBooks ? (
           <Skeleton className="h-[200px] w-full" />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 min-h-[160px]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 min-h-[160px]">
             {previewBooks.length > 0 ? (
               <>
-                {previewBooks.map((book) => (
-                  <Link key={book.id} href={`/books/${book.id}`}>
-                    <div className="book-card">
-                      <img 
-                        src={book.coverImage || book.coverImageUrl || getBookCoverPlaceholder()} 
-                        alt={book.title} 
-                        className="h-24 w-full object-cover rounded shadow-sm mb-1"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.onerror = null;
-                          target.src = getBookCoverPlaceholder();
-                        }}
-                      />
-                      <p className="text-xs font-semibold text-gray-700 truncate w-full px-1" title={book.title}>
-                        {book.title}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
+                {previewBooks.map((book) => {
+                  // Enhanced log to see more details, especially for personal bookshelves
+                  if (bookshelf.ownerId === currentUser?.id && !bookshelf.familyId) { // Heuristic for a personal bookshelf
+                    console.log("Rendering PERSONAL bookshelf preview book:", 
+                                { id: book.id, title: book.title, coverImage: book.coverImage, coverImageUrl: book.coverImageUrl });
+                  } else {
+                    console.log("Rendering preview book (other):", book.id, book.title);
+                  }
+                  return (
+                    <Link key={`preview-${book.id}`} to={`/books/${book.id}`} className="block group focus:outline-none focus:ring-2 focus:ring-primary rounded-lg">
+                      <div className="book-card flex flex-col items-center text-center p-2 rounded-lg border border-gray-200 group-hover:shadow-xl group-hover:border-primary transition-all h-full bg-white">
+                        <img 
+                          src={book.coverImage || book.coverImageUrl || getBookCoverPlaceholder()} 
+                          alt={book.title} 
+                          className="h-32 w-full object-cover rounded shadow-sm mb-2 group-hover:shadow-lg transition-shadow"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null;
+                            target.src = getBookCoverPlaceholder();
+                          }}
+                        />
+                        <p className="text-xs font-semibold text-gray-800 group-hover:text-primary-dark truncate w-full px-1 leading-tight" title={book.title}>
+                          {book.title}
+                        </p>
+                        {book.author && (
+                          <p className="text-xs text-gray-500 truncate w-full px-1 leading-tight">{book.author}</p>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
               </>
             ) : (
-              <div className="col-span-2 md:col-span-4 lg:col-span-5 flex flex-col items-center justify-center py-6 bg-gray-50 rounded-lg">
-                <i className="fas fa-book text-gray-300 text-3xl mb-2"></i>
-                <p className="text-gray-500 mb-4">{t('dashboard.noBooks', '书架暂无书籍')}</p>
-                <Link href={`/add-book?bookshelfId=${bookshelf.id}&source=${bookshelf.familyId ? 'family-bookshelf' : 'my-bookshelf'}`}>
+              <div className="col-span-full flex flex-col items-center justify-center py-6 bg-gray-50 rounded-lg min-h-[160px]">
+                <i className="fas fa-book-reader text-gray-300 text-4xl mb-3"></i>
+                <p className="text-gray-500 mb-3">{t('dashboard.noBooksInShelf', '这个书架还没有书籍')}</p>
+                <Link to={`/add-book?bookshelfId=${bookshelf.id}&source=${bookshelf.familyId ? 'family-bookshelf' : 'my-bookshelf'}`}>
                   <Button size="sm">
-              <i className="fas fa-plus mr-2"></i>
-                    {t('dashboard.addFirstBook')}
+                    <i className="fas fa-plus mr-2"></i>
+                    {t('dashboard.addFirstBookToThisShelf', '添加第一本')}
                   </Button>
                 </Link>
               </div>
             )}
             
-            {/* 如果有书籍但少于5本，显示添加按钮 */}
             {previewBooks.length > 0 && previewBooks.length < 5 && (
-              <Link href={`/add-book?bookshelfId=${bookshelf.id}&source=${bookshelf.familyId ? 'family-bookshelf' : 'my-bookshelf'}`}>
-                <div className="cursor-pointer flex items-center justify-center h-32 border-2 border-dashed border-gray-300 p-4 rounded-lg hover:border-primary">
-                  <div className="text-center">
-                    <i className="fas fa-plus text-2xl text-gray-400 mb-2"></i>
-                    <p className="text-sm text-gray-500">{t('dashboard.addBook')}</p>
-                  </div>
+              <Link to={`/add-book?bookshelfId=${bookshelf.id}&source=${bookshelf.familyId ? 'family-bookshelf' : 'my-bookshelf'}`} className="block">
+                <div className="cursor-pointer flex flex-col items-center justify-center h-full min-h-[160px] border-2 border-dashed border-gray-300 p-4 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors">
+                  <i className="fas fa-plus text-3xl text-gray-400 mb-2"></i>
+                  <p className="text-sm text-gray-500">{t('dashboard.addBookToShelf', '添加到此书架')}</p>
                 </div>
-            </Link>
+              </Link>
             )}
           </div>
         )}
-        </div>
+      </div>
     );
   };
 
@@ -352,15 +369,15 @@ export default function Dashboard() {
                   ) : !familyBookshelves || familyBookshelves.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg">
                       <p className="text-gray-500 mb-4">{t('dashboard.noFamilyBookshelves')}</p>
-                      <Link href="/family-bookshelf">
+                      <Link to="/family-bookshelf">
                         <Button>{t('dashboard.createFamilyBookshelf')}</Button>
                       </Link>
-          </div>
+                    </div>
                   ) : (
                     <div className="space-y-6">
                       {familyBookshelves.map(renderBookshelf)}
-          </div>
-        )}
+                    </div>
+                  )}
                 </TabsContent>
                 
                 <TabsContent value="personal">
@@ -369,9 +386,9 @@ export default function Dashboard() {
                   ) : !personalBookshelves || personalBookshelves.length === 0 ? (
                     <div className="text-center py-8 bg-gray-50 rounded-lg">
                       <p className="text-gray-500 mb-4">{t('dashboard.noPersonalBookshelves')}</p>
-                      <Link href="/my-bookshelf">
+                      <Link to="/my-bookshelf">
                         <Button>{t('dashboard.createPersonalBookshelf')}</Button>
-            </Link>
+                      </Link>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -382,8 +399,8 @@ export default function Dashboard() {
               </Tabs>
             </CardContent>
           </Card>
-          </div>
-          
+        </div>
+        
         {/* 右侧部分：AI聊天、最近添加的书和活动日志 */}
         <div className="lg:w-1/3 space-y-6">
           {/* AI Chat Section */}
@@ -395,7 +412,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-64 pr-3 mb-3" ref={chatScrollAreaRef}>
+              <ScrollArea className="h-80 pr-3 mb-3" ref={chatScrollAreaRef}>
                 <div className="space-y-3">
                   {chatHistory.map((msg, index) => (
                     <div 
@@ -423,7 +440,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
-                  </div>
+                </div>
               </ScrollArea>
               <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
                 <Textarea 
@@ -449,12 +466,7 @@ export default function Dashboard() {
           {/* 最近添加的书籍 */}
           <Card className="mb-6">
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>{t('dashboard.recentlyAdded')}</CardTitle>
-                <Link href="/my-bookshelf">
-                  <Button variant="ghost" size="sm">{t('dashboard.viewAll')}</Button>
-                </Link>
-              </div>
+              <CardTitle>{t('dashboard.recentlyAdded')}</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoadingRecentBooks ? (
@@ -463,32 +475,41 @@ export default function Dashboard() {
                   <Skeleton className="h-[80px] w-full" />
                   <Skeleton className="h-[80px] w-full" />
                 </div>
-              ) : !recentBooks || recentBooks.length === 0 ? (
+              ) : !allRecentBooks || allRecentBooks.length === 0 ? (
                 <p className="text-center text-gray-500 py-4">{t('dashboard.noRecentBooks')}</p>
               ) : (
-                <div className="space-y-4">
-                  {recentBooks.map((book) => (
-                    <Link key={book.id} href={`/books/${book.id}`}>
-                      <div className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                        <img 
-                          src={book.coverImage || book.coverImageUrl || getBookCoverPlaceholder()} 
-                          alt={book.title} 
-                          className="w-12 h-16 object-cover rounded mr-3"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.onerror = null;
-                            target.src = getBookCoverPlaceholder();
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-medium text-gray-900 truncate">{book.title}</h4>
-                          <p className="text-xs text-gray-500">{book.author}</p>
-                          <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(book.addedDate))}</p>
-          </div>
-        </div>
-                    </Link>
-                  ))}
-          </div>
+                <>
+                  <div className="space-y-4">
+                    {recentBooksToShow.map((book) => (
+                      <Link key={book.id} to={`/books/${book.id}`}>
+                        <div className="flex items-center p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                          <img 
+                            src={book.coverImage || book.coverImageUrl || getBookCoverPlaceholder()} 
+                            alt={book.title} 
+                            className="w-12 h-16 object-cover rounded mr-3"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.onerror = null;
+                              target.src = getBookCoverPlaceholder();
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-medium text-gray-900 truncate">{book.title}</h4>
+                            <p className="text-xs text-gray-500">{book.author}</p>
+                            <p className="text-xs text-gray-400 mt-1">{formatDate(new Date(book.addedDate))}</p>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                  {allRecentBooks.length > 5 && (
+                    <div className="mt-4 text-center">
+                      <Button variant="link" onClick={() => setShowAllRecentBooks(!showAllRecentBooks)} className="text-sm">
+                        {showAllRecentBooks ? t('dashboard.showLess', '收起') : t('dashboard.showAllRecent', '查看全部 ({{count}}本)', { count: allRecentBooks.length })}
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

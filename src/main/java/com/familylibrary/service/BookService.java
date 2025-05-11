@@ -126,6 +126,9 @@ public class BookService {
         if (bookshelf != null) {
             dto.setBookshelfId(bookshelf.getId());
             dto.setBookshelfName(bookshelf.getName());
+            if (bookshelf.getFamily() != null) {
+                dto.setFamilyName(bookshelf.getFamily().getName());
+            }
         }
         
         if (book.getShelfNumber() != null && book.getPositionNumber() != null) {

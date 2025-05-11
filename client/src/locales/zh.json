@@ -69,7 +69,12 @@
     "aiThinking": "AI思考中...",
     "aiChatInitialWelcome": "AI助手正在启动，请稍候...",
     "aiDefaultWelcome": "你好！开始您的阅读对话吧。",
-    "aiChatErrorFallback": "抱歉，AI助手初始化失败，您可以直接开始提问。"
+    "aiChatErrorFallback": "抱歉，AI助手初始化失败，您可以直接开始提问。",
+    "showLess": "收起",
+    "showAllRecent": "查看全部 ({{count}}本)",
+    "noBooksInShelf": "这个书架还没有书籍",
+    "addFirstBookToThisShelf": "添加第一本",
+    "addBookToShelf": "添加到此书架"
   },
   "myBookshelf": {
     "title": "我的书架",
@@ -278,5 +283,12 @@
     "title": "搜索结果",
     "error": "加载搜索结果时出错，请稍后再试。",
     "noResults": "未找到与 \"{{searchTerm}}\" 相关的书籍。请尝试其他关键词。"
+  },
+  "bookCard": {
+    "unknownBookshelf": "未知书架",
+    "family": "家庭",
+    "bookshelf": "书架",
+    "shelf": "层",
+    "position": "位置"
   }
 }

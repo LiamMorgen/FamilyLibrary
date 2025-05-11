@@ -61,6 +61,8 @@ export interface Book {
   shelfPosition?: ShelfPosition | null;
   status: string; // "available", "borrowed", "reading"
   addedDate: string | Date;
+  bookshelfName?: string;
+  familyName?: string;
   currentLendingId?: number;
   currentBorrower?: {
     id: number;
