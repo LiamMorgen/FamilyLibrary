@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
@@ -81,8 +81,9 @@ const LoginPage: React.FC = () => {
                     {loading ? '登录中...' : '登录'}
                 </button>
             </form>
-            {/* TODO: 添加注册链接 */}
-            {/* <p>还没有账户? <a href="/register">立即注册</a></p> */}
+            <p style={{ marginTop: '15px', textAlign: 'center' }}>
+                还没有账户? <Link to="/register" style={{ color: '#007bff', textDecoration: 'none' }}>立即注册</Link>
+            </p>
         </div>
     );
 };

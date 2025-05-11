@@ -14,6 +14,7 @@ public class UserDto {
     private String email;
     private String avatar;
     private boolean isOnline; // Changed from isOnline to isOnline to match typical boolean naming
+    private java.util.Set<FamilySimpleDto> families;
     // Add any other fields you want to expose about the user
     // IMPORTANT: Do NOT include password or other sensitive information here.
 } 

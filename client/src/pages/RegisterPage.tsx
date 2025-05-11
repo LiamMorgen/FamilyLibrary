@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 const RegisterPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -110,8 +111,9 @@ const RegisterPage: React.FC = () => {
                     {loading ? '注册中...' : '注册'}
                 </button>
             </form>
-            {/* TODO: 添加登录链接 */}
-            {/* <p>已经有账户了? <a href="/login">立即登录</a></p> */}
+            <p style={{ marginTop: '15px', textAlign: 'center' }}>
+                已经有账户了? <Link to="/login" style={{ color: '#007bff', textDecoration: 'none' }}>立即登录</Link>
+            </p>
         </div>
     );
 };

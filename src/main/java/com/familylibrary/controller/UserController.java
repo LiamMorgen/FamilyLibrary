@@ -1,6 +1,8 @@
 package com.familylibrary.controller;
 
+import com.familylibrary.dto.FamilySimpleDto;
 import com.familylibrary.dto.UserDto; // Assuming UserDto exists
+import com.familylibrary.model.Family;
 import com.familylibrary.model.User;
 import com.familylibrary.repository.UserRepository;
 // import com.familylibrary.service.UserService; // Assuming UserService exists for mapping or richer logic - REMOVED
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -48,20 +51,7 @@ public class UserController {
             return ResponseEntity.status(404).body("User not found in repository");
         }
 
-        // TODO: Convert User to UserDto to avoid exposing sensitive data like password
-        // For now, returning the User object directly (or a simplified map)
-        // UserDto userDto = userService.convertToDto(user); 
-        // return ResponseEntity.ok(userDto);
-
-        // Simplified response for now:
-        UserDto responseUser = new UserDto();
-        responseUser.setId(user.getId());
-        responseUser.setUsername(user.getUsername());
-        responseUser.setDisplayName(user.getDisplayName());
-        responseUser.setEmail(user.getEmail());
-        responseUser.setAvatar(user.getAvatar());
-        responseUser.setOnline(user.isOnline());
-        // DO NOT include password or other sensitive fields
+        UserDto responseUser = convertUserToDto(user);
 
         return ResponseEntity.ok(responseUser);
     }
@@ -69,18 +59,30 @@ public class UserController {
     @GetMapping
     public ResponseEntity<List<UserDto>> getAllUsers() {
         List<User> users = userRepository.findAll();
-        List<UserDto> userDtos = users.stream().map(user -> {
-            UserDto dto = new UserDto();
-            dto.setId(user.getId());
-            dto.setUsername(user.getUsername());
-            dto.setDisplayName(user.getDisplayName());
-            dto.setEmail(user.getEmail());
-            dto.setAvatar(user.getAvatar());
-            dto.setOnline(user.isOnline());
-            // DO NOT include password or other sensitive fields
-            return dto;
-        }).collect(Collectors.toList());
+        List<UserDto> userDtos = users.stream()
+                                      .map(this::convertUserToDto)
+                                      .collect(Collectors.toList());
         return ResponseEntity.ok(userDtos);
+    }
+
+    private UserDto convertUserToDto(User user) {
+        UserDto dto = new UserDto();
+        dto.setId(user.getId());
+        dto.setUsername(user.getUsername());
+        dto.setDisplayName(user.getDisplayName());
+        dto.setEmail(user.getEmail());
+        dto.setAvatar(user.getAvatar());
+        dto.setOnline(user.isOnline());
+
+        if (user.getFamilies() != null) {
+            Set<FamilySimpleDto> familyDtos = user.getFamilies().stream()
+                    .map(family -> new FamilySimpleDto(family.getId(), family.getName()))
+                    .collect(Collectors.toSet());
+            dto.setFamilies(familyDtos);
+        } else {
+            dto.setFamilies(java.util.Collections.emptySet());
+        }
+        return dto;
     }
 
     // TODO: Add GET /api/users for listing all users (admin functionality)

@@ -29,13 +29,24 @@ public class BookshelfService {
 
     @Transactional
     public BookshelfDto createBookshelf(CreateBookshelfRequest request) {
-        User owner = userRepository.findById(request.getOwnerId())
-                .orElseThrow(() -> new EntityNotFoundException("Owner (User) not found with id: " + request.getOwnerId()));
-        Family family = familyRepository.findById(request.getFamilyId())
-                .orElseThrow(() -> new EntityNotFoundException("Family not found with id: " + request.getFamilyId()));
+        if (request.getOwnerId() == null && request.getFamilyId() == null) {
+            throw new IllegalArgumentException("A bookshelf must be associated with an owner (user) or a family.");
+        }
 
-        // Optional: Check if user is a member of the family if that's a business rule
-        // if (!owner.getFamilies().contains(family)) {
+        User owner = null;
+        if (request.getOwnerId() != null) {
+            owner = userRepository.findById(request.getOwnerId())
+                    .orElseThrow(() -> new EntityNotFoundException("Owner (User) not found with id: " + request.getOwnerId()));
+        }
+
+        Family family = null;
+        if (request.getFamilyId() != null) {
+            family = familyRepository.findById(request.getFamilyId())
+                    .orElseThrow(() -> new EntityNotFoundException("Family not found with id: " + request.getFamilyId()));
+        }
+
+        // Optional: Check if user is a member of the family if both are provided and that's a business rule
+        // if (owner != null && family != null && !owner.getFamilies().contains(family)) {
         //     throw new IllegalArgumentException("Owner is not a member of the specified family.");
         // }
 
@@ -120,10 +131,23 @@ public class BookshelfService {
         BookshelfDto dto = new BookshelfDto();
         dto.setId(bookshelf.getId());
         dto.setName(bookshelf.getName());
-        dto.setOwnerId(bookshelf.getOwner().getId());
-        dto.setOwnerUsername(bookshelf.getOwner().getUsername()); // or displayName
-        dto.setFamilyId(bookshelf.getFamily().getId());
-        dto.setFamilyName(bookshelf.getFamily().getName());
+
+        if (bookshelf.getOwner() != null) {
+            dto.setOwnerId(bookshelf.getOwner().getId());
+            dto.setOwnerUsername(bookshelf.getOwner().getDisplayName()); // Prefer displayName
+        } else {
+            dto.setOwnerId(null);
+            dto.setOwnerUsername(null);
+        }
+
+        if (bookshelf.getFamily() != null) {
+            dto.setFamilyId(bookshelf.getFamily().getId());
+            dto.setFamilyName(bookshelf.getFamily().getName());
+        } else {
+            dto.setFamilyId(null);
+            dto.setFamilyName(null);
+        }
+
         dto.setNumShelves(bookshelf.getNumShelves());
         dto.setPrivate(bookshelf.isPrivate());
         dto.setBookIds(bookshelf.getBooks().stream().map(Book::getId).collect(Collectors.toList()));

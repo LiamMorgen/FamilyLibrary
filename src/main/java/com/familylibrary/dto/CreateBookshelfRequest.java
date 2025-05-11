@@ -13,10 +13,8 @@ public class CreateBookshelfRequest {
     @Size(min = 1, max = 100, message = "Bookshelf name must be between 1 and 100 characters")
     private String name;
 
-    @NotNull(message = "Owner ID cannot be null")
     private Long ownerId;
 
-    @NotNull(message = "Family ID cannot be null")
     private Long familyId;
 
     @Min(value = 1, message = "Number of shelves must be at least 1")

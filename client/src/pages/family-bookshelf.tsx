@@ -1,125 +1,172 @@
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Book, Bookshelf as BookshelfType, ShelfPosition } from "@/lib/types";
 import { Bookshelf } from "@/components/ui/bookshelf";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { CreateBookshelfDialog } from "@/components/bookshelf/CreateBookshelfDialog";
+import { apiRequest } from "@/lib/queryClient"; // Import apiRequest
+
+// Function to fetch family bookshelves
+async function fetchFamilyBookshelves(): Promise<BookshelfType[]> {
+  // Assuming 'current' will be resolved by the backend to the current user's family ID(s)
+  const response = await apiRequest('GET', '/api/bookshelves/family/current');
+  if (!response.ok) {
+    throw new Error('Network response was not ok for fetching family bookshelves');
+  }
+  return response.json();
+}
+
+// Function to fetch books for a specific bookshelf (can be reused from my-bookshelf or defined here)
+async function fetchBooksForBookshelf(bookshelfId: number | undefined | null): Promise<Book[]> {
+  if (!bookshelfId) return [];
+  const response = await apiRequest('GET', `/api/books?bookshelfId=${bookshelfId}`);
+  if (!response.ok) {
+    throw new Error('Network response was not ok for fetching books');
+  }
+  return response.json();
+}
 
 export default function FamilyBookshelf() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [activeTabBookshelfId, setActiveTabBookshelfId] = useState<number | null>(null);
 
   // Fetch family bookshelves
-  const { data: familyBookshelves, isLoading: isLoadingBookshelves } = useQuery<BookshelfType[]>({
-    queryKey: ['/api/bookshelves', { familyId: 'current' }],
+  const { data: familyBookshelves, isLoading: isLoadingBookshelves, error: bookshelvesError } = useQuery<BookshelfType[], Error>({
+    queryKey: ['/api/bookshelves/family/current'], // Updated queryKey
+    queryFn: fetchFamilyBookshelves,
   });
 
-  // Get main family bookshelf (first one)
-  const activeBookshelf = familyBookshelves && familyBookshelves.length > 0 ? familyBookshelves[0] : null;
+  // Set the first bookshelf as active by default if not already set
+  useEffect(() => {
+    if (familyBookshelves && familyBookshelves.length > 0 && activeTabBookshelfId === null) {
+      setActiveTabBookshelfId(familyBookshelves[0].id);
+    }
+  }, [familyBookshelves, activeTabBookshelfId]);
+
+  // Find the currently active bookshelf object
+  const activeBookshelf = familyBookshelves?.find(bs => bs.id === activeTabBookshelfId);
 
   // Fetch books for the active bookshelf
-  const { data: books, isLoading: isLoadingBooks } = useQuery<Book[]>({
+  const { data: booksForActiveBookshelf, isLoading: isLoadingBooks, error: booksError } = useQuery<Book[], Error>({
     queryKey: ['/api/books', { bookshelfId: activeBookshelf?.id }],
-    enabled: !!activeBookshelf,
+    queryFn: () => fetchBooksForBookshelf(activeBookshelf?.id),
+    enabled: !!activeBookshelf, // Only run if there's an active bookshelf
   });
 
-  const handleAddBook = (shelfPosition: ShelfPosition) => {
-    navigate(`/add-book?bookshelfId=${activeBookshelf?.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}`);
+  const handleCreateBookshelf = () => {
+    setIsCreateDialogOpen(true);
   };
 
-  const handleAddShelf = () => {
-    // Handle adding a new shelf to the bookshelf
-    console.log("Add new shelf");
+  const handleBookshelfCreated = (newBookshelf: BookshelfType) => {
+    console.log("New family bookshelf created:", newBookshelf);
+    queryClient.invalidateQueries({ queryKey: ['/api/bookshelves/family/current'] }); // Updated queryKey
+    setIsCreateDialogOpen(false);
+    // Optionally, switch to the new bookshelf tab
+    setActiveTabBookshelfId(newBookshelf.id);
   };
+
+  const handleAddBookToFamilyShelf = (shelfPosition: ShelfPosition) => {
+    if (activeBookshelf) {
+      navigate(`/add-book?bookshelfId=${activeBookshelf.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}`);
+    } else {
+      console.warn("No active family bookshelf to add a book to.");
+      // Potentially show a message or guide user
+    }
+  };
+
+  if (isLoadingBookshelves) {
+    return (
+      <div className="p-4">
+        <Skeleton className="h-8 w-1/4 mb-4" />
+        <Skeleton className="h-10 w-full mb-4" /> {/* For TabsList */}
+        <Skeleton className="h-[300px] w-full" /> {/* For TabsContent */}
+      </div>
+    );
+  }
+
+  if (bookshelvesError) {
+    return <div className="text-red-500 p-4">{t('familyBookshelf.loadError')}: {bookshelvesError.message}</div>;
+  }
+
+  if (!familyBookshelves || familyBookshelves.length === 0) {
+    return (
+      <div className="container mx-auto p-4">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">{t('familyBookshelf.title')}</h1>
+          <Button onClick={handleCreateBookshelf} data-testid="create-family-bookshelf-button">
+            {t('familyBookshelf.createButton')}
+          </Button>
+        </div>
+        <div className="text-center py-10">
+          <p className="mb-4">{t('familyBookshelf.noBookshelves')}</p>
+        </div>
+        <CreateBookshelfDialog
+          isOpen={isCreateDialogOpen}
+          onOpenChange={setIsCreateDialogOpen}
+          context="family-bookshelf"
+          // defaultFamilyId can be passed if known, or determined in dialog based on user's families
+          onSuccess={handleBookshelfCreated}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="font-heading text-2xl font-bold text-primary">{t('familyBookshelf.title')}</h1>
-        <Button onClick={() => navigate('/add-book')}>
-          <i className="fas fa-plus mr-2"></i>
-          {t('familyBookshelf.addBook')}
+        <h1 className="text-2xl font-bold">{t('familyBookshelf.title')}</h1>
+        <Button onClick={handleCreateBookshelf} data-testid="create-family-bookshelf-button">
+          {t('familyBookshelf.createButton')}
         </Button>
       </div>
 
-      {isLoadingBookshelves ? (
-        <Skeleton className="h-10 w-full max-w-md mb-4" />
-      ) : familyBookshelves && familyBookshelves.length > 0 ? (
-        <Tabs defaultValue={familyBookshelves[0].id.toString()} className="mb-6">
-          <TabsList className="w-full max-w-md mb-4">
-            {familyBookshelves.map(bookshelf => (
-              <TabsTrigger 
-                key={bookshelf.id} 
-                value={bookshelf.id.toString()}
-                className="flex-1"
-              >
-                {bookshelf.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          
-          {familyBookshelves.map(bookshelf => (
-            <TabsContent key={bookshelf.id} value={bookshelf.id.toString()}>
-              {isLoadingBooks ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <div className="flex flex-col space-y-6">
-                    {[1, 2].map(index => (
-                      <div key={`skeleton-shelf-${index}`} className="flex flex-col">
-                        <div className="flex-1 grid grid-cols-6 gap-3 mb-2 px-2 py-3 bg-gray-100 rounded">
-                          {[1, 2, 3, 4, 5, 6].map(i => (
-                            <Skeleton key={`book-skeleton-${index}-${i}`} className="h-24 w-full rounded" />
-                          ))}
-                        </div>
-                        <div className="h-1 bg-secondary/30 rounded-b"></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : books ? (
-                <Bookshelf 
-                  numShelves={bookshelf.numShelves || 2} 
-                  books={books.filter(b => b.bookshelfId === bookshelf.id)}
-                  onAddBook={handleAddBook}
-                  onAddShelf={handleAddShelf}
-                />
-              ) : null}
-            </TabsContent>
+      <Tabs value={activeTabBookshelfId?.toString()} onValueChange={(val) => setActiveTabBookshelfId(Number(val))}>
+        <TabsList className="mb-4">
+          {familyBookshelves.map((shelf) => (
+            <TabsTrigger key={shelf.id} value={shelf.id.toString()}>
+              {shelf.name}
+            </TabsTrigger>
           ))}
-        </Tabs>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 text-center py-12">
-          <p className="text-gray-500 mb-4">{t('familyBookshelf.noBookshelfFound')}</p>
-          <Button>
-            {t('familyBookshelf.createBookshelf')}
-          </Button>
-        </div>
-      )}
+        </TabsList>
 
-      <div className="mt-8">
-        <h2 className="font-heading text-xl font-bold mb-4">{t('familyBookshelf.familyMembers')}</h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {['张家豪', '张丽娜', '张伟', '小明'].map((member) => (
-            <div key={member} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-center">
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member)}&background=random`} 
-                  alt={member} 
-                  className="w-10 h-10 rounded-full mr-3"
+        {familyBookshelves.map((shelf) => (
+          <TabsContent key={shelf.id} value={shelf.id.toString()}>
+            {activeBookshelf && activeBookshelf.id === shelf.id ? (
+              isLoadingBooks ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : booksError ? (
+                 <div className="text-red-500">{t('familyBookshelf.loadBooksError')}: {booksError.message}</div>
+              ) : (
+                <Bookshelf
+                  numShelves={activeBookshelf.numShelves || 1}
+                  books={booksForActiveBookshelf || []}
+                  onAddBook={handleAddBookToFamilyShelf}
+                  // onAddShelf might be relevant if family members can extend shelves
                 />
-                <div>
-                  <h3 className="font-heading">{member}</h3>
-                  <span className="text-gray-500 text-sm">
-                    {Math.floor(Math.random() * 50)} {t('familyBookshelf.books')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+              )
+            ) : (
+              // This content is for non-active tabs, can be a placeholder or lighter content if needed
+              // Or simply rely on the active tab rendering the Bookshelf component
+              <div>{t('familyBookshelf.selectTabToView', { name: shelf.name })}</div>
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      <CreateBookshelfDialog
+        isOpen={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        context="family-bookshelf"
+        defaultFamilyId={activeBookshelf?.familyId} // Pass active family ID, or let dialog fetch user's families
+        onSuccess={handleBookshelfCreated}
+      />
     </div>
   );
 }

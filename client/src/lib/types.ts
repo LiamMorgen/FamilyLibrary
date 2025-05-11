@@ -4,8 +4,10 @@ export interface User {
   id: number;
   username: string;
   displayName: string;
+  email?: string;
   avatar?: string;
-  isOnline: boolean;
+  isOnline?: boolean;
+  families?: FamilySimpleDto[];
 }
 
 export interface Family {
@@ -22,10 +24,16 @@ export interface UserFamily {
 export interface Bookshelf {
   id: number;
   name: string;
-  familyId: number;
-  userId: number;
+  ownerId?: number | null;
+  ownerUsername?: string | null;
+  familyId?: number | null;
+  familyName?: string | null;
   numShelves: number;
   isPrivate: boolean;
+  bookIds?: number[];
+  createdAt: string;
+  updatedAt: string;
+  books?: Book[];
 }
 
 export interface ShelfPosition {
@@ -77,4 +85,9 @@ export interface Activity {
   relatedUserId?: number;
   timestamp: string | Date;
   data?: Record<string, any>; // Additional activity data
+}
+
+export interface FamilySimpleDto {
+  id: number;
+  name: string;
 }

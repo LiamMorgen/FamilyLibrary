@@ -1,96 +1,116 @@
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import type { Book, Bookshelf as BookshelfType, ShelfPosition } from "@/lib/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Bookshelf as BookshelfType, ShelfPosition } from "@/lib/types";
 import { Bookshelf } from "@/components/ui/bookshelf";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useLocation } from "wouter";
+import { useState } from "react";
+import { CreateBookshelfDialog } from "@/components/bookshelf/CreateBookshelfDialog";
+import { apiRequest } from "@/lib/queryClient";
+import { useNavigate } from "react-router-dom";
+import type { Book } from "@/lib/types";
+
+async function fetchMyBookshelves(): Promise<BookshelfType[]> {
+  const response = await apiRequest('GET', '/api/bookshelves/owner/current');
+  if (!response.ok) { 
+    throw new Error('Network response was not ok for fetching bookshelves');
+  }
+  return response.json(); 
+}
+
+async function fetchBooksForBookshelf(bookshelfId: number | undefined | null): Promise<Book[]> {
+  if (!bookshelfId) return []; 
+  const response = await apiRequest('GET', `/api/books?bookshelfId=${bookshelfId}`);
+  if (!response.ok) {
+    throw new Error('Network response was not ok for fetching books');
+  }
+  return response.json();
+}
 
 export default function MyBookshelf() {
   const { t } = useTranslation();
-  const [_, navigate] = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
-  // Fetch current user's bookshelf
-  const { data: myBookshelves, isLoading: isLoadingBookshelves } = useQuery<BookshelfType[]>({
-    queryKey: ['/api/bookshelves', { userId: 'current' }],
+  const { data: myBookshelves, isLoading: isLoadingBookshelves, error: bookshelvesError } = useQuery<BookshelfType[], Error>({
+    queryKey: ['/api/bookshelves/owner/current'],
+    queryFn: fetchMyBookshelves,
   });
 
-  // Get personal bookshelf (first one)
   const myBookshelf = myBookshelves && myBookshelves.length > 0 ? myBookshelves[0] : null;
 
-  // Fetch books for the personal bookshelf
-  const { data: books, isLoading: isLoadingBooks } = useQuery<Book[]>({
+  const { data: books, isLoading: isLoadingBooks, error: booksError } = useQuery<Book[], Error>({
     queryKey: ['/api/books', { bookshelfId: myBookshelf?.id }],
-    enabled: !!myBookshelf,
+    queryFn: () => fetchBooksForBookshelf(myBookshelf?.id),
+    enabled: !!myBookshelf, 
   });
 
-  const handleAddBook = (shelfPosition: ShelfPosition) => {
-    navigate(`/add-book?bookshelfId=${myBookshelf?.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}`);
+  if (isLoadingBookshelves) {
+    return (
+      <div className="space-y-4 p-4">
+        <Skeleton className="h-8 w-1/4" />
+        <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (bookshelvesError) {
+    return <div className="text-red-500 p-4">{t('myBookshelf.loadError')}: {bookshelvesError.message}</div>;
+  }
+  
+  const handleAddBookToShelf = (shelfPosition: ShelfPosition) => {
+    if (myBookshelf) {
+      navigate(`/add-book?bookshelfId=${myBookshelf.id}&shelf=${shelfPosition.shelf}&position=${shelfPosition.position}`);
+    } else {
+      console.warn("No bookshelf available to add a book to.");
+      setIsCreateDialogOpen(true);
+    }
   };
 
   const handleCreateBookshelf = () => {
-    // Handle creating a new bookshelf for the user
-    // In a real app, this would open a form or modal
-    console.log("Create new bookshelf");
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleBookshelfCreated = (newBookshelf: BookshelfType) => {
+    console.log("New bookshelf created:", newBookshelf);
+    queryClient.invalidateQueries({ queryKey: ['/api/bookshelves/owner/current'] });
+    setIsCreateDialogOpen(false);
   };
 
   return (
-    <div>
+    <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="font-heading text-2xl font-bold text-primary">{t('myBookshelf.title')}</h1>
-        <Button onClick={() => navigate('/add-book')}>
-          <i className="fas fa-plus mr-2"></i>
-          {t('myBookshelf.addBook')}
+        <h1 className="text-2xl font-bold">{t('myBookshelf.title')}</h1>
+        <Button onClick={handleCreateBookshelf} data-testid="create-my-bookshelf-button">
+          {t('myBookshelf.createButton')}
         </Button>
       </div>
 
-      {isLoadingBookshelves || isLoadingBooks ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-          <div className="flex flex-col space-y-6">
-            {[1, 2].map(index => (
-              <div key={`skeleton-shelf-${index}`} className="flex flex-col">
-                <div className="flex-1 grid grid-cols-6 gap-3 mb-2 px-2 py-3 bg-gray-100 rounded">
-                  {[1, 2, 3, 4, 5, 6].map(i => (
-                    <Skeleton key={`book-skeleton-${index}-${i}`} className="h-24 w-full rounded" />
-                  ))}
-                </div>
-                <div className="h-1 bg-secondary/30 rounded-b"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : books && myBookshelf ? (
-        <Bookshelf 
-          numShelves={myBookshelf.numShelves || 2} 
-          books={books}
-          onAddBook={handleAddBook}
-          onAddShelf={() => {}} // Not allowing adding shelves to personal bookshelf
-        />
+      {myBookshelf ? (
+        isLoadingBooks ? (
+          <Skeleton className="h-[300px] w-full" /> 
+        ) : booksError ? (
+          <div className="text-red-500">{t('myBookshelf.loadBooksError')}: {booksError.message}</div>
+        ) : (
+          <Bookshelf
+            numShelves={myBookshelf.numShelves || 1} 
+            books={books || []} 
+            onAddBook={handleAddBookToShelf} 
+          />
+        )
       ) : (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 text-center py-12">
-          <p className="text-gray-500 mb-4">{t('myBookshelf.noBookshelfFound')}</p>
-          <Button onClick={handleCreateBookshelf}>
-            {t('myBookshelf.createBookshelf')}
-          </Button>
+        <div className="text-center py-10">
+          <p className="mb-4">{t('myBookshelf.noBookshelf')}</p>
         </div>
       )}
 
-      <div className="mt-8">
-        <h2 className="font-heading text-xl font-bold mb-4">{t('myBookshelf.categories')}</h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {['科幻', '小说', '文学', '历史', '心理学', '科普', '传记', '艺术'].map(category => (
-            <div key={category} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-center">
-                <h3 className="font-heading">{category}</h3>
-                <span className="text-gray-500 text-sm">
-                  {Math.floor(Math.random() * 20)} {t('myBookshelf.books')}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <CreateBookshelfDialog
+        isOpen={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        context="my-bookshelf"
+        onSuccess={handleBookshelfCreated}
+      />
     </div>
   );
 }

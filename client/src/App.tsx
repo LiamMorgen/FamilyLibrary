@@ -13,13 +13,19 @@ import BorrowingRecords from "@/pages/borrowing-records";
 import ReadingStats from "@/pages/reading-stats";
 import AddBookPage from "@/pages/add-book";
 import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
 import Header from "@/components/layout/header";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import { useTranslation } from "react-i18next";
 
 const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoadingUser, token } = useAuth();
+
+  if (isLoadingUser && token) {
+    return <div>加载中...</div>;
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
@@ -41,6 +47,7 @@ function AppLayout() {
             <Route path="/reading-stats" element={<ProtectedRoute><ReadingStats /></ProtectedRoute>} />
             <Route path="/add-book" element={<ProtectedRoute><AddBookPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
