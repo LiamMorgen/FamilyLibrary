@@ -9,10 +9,11 @@ public class BookLendingDto {
     private Long id;
     private Long bookId;
     private String bookTitle; // Convenience
+    private String bookCoverImage; // Added for UI
     private Long lenderId;
-    private String lenderUsername; // Convenience
+    private String lenderName; // Changed from lenderUsername for consistency with UI needs
     private Long borrowerId;
-    private String borrowerUsername; // Convenience
+    private String borrowerName; // Changed from borrowerUsername for consistency with UI needs
     private LocalDateTime lendDate;
     private LocalDateTime dueDate;
     private LocalDateTime returnDate; // Nullable

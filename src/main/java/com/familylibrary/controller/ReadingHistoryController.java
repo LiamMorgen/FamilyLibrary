@@ -19,6 +19,15 @@ public class ReadingHistoryController {
 
     private final ReadingHistoryService readingHistoryService;
 
+    @GetMapping
+    public ResponseEntity<List<ReadingHistoryDto>> getReadingHistory(
+            @RequestParam(required = false) String userId,
+            @RequestParam(required = false) Long bookId,
+            @RequestParam(required = false) Long familyId) {
+        List<ReadingHistoryDto> historyList = readingHistoryService.getReadingHistory(userId, bookId, familyId);
+        return ResponseEntity.ok(historyList);
+    }
+
     @PostMapping
     public ResponseEntity<ReadingHistoryDto> createReadingHistory(@Valid @RequestBody CreateReadingHistoryRequest request) {
         ReadingHistoryDto createdHistory = readingHistoryService.createReadingHistory(request);

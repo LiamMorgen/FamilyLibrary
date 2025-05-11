@@ -2,6 +2,7 @@ package com.familylibrary.service;
 
 import com.familylibrary.dto.FamilyDto;
 import com.familylibrary.dto.CreateFamilyRequest;
+import com.familylibrary.dto.UserDto;
 import com.familylibrary.model.Family;
 import com.familylibrary.model.User;
 import com.familylibrary.repository.FamilyRepository;
@@ -9,9 +10,12 @@ import com.familylibrary.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -91,32 +95,49 @@ public class FamilyService {
         Family family = familyRepository.findById(familyId)
             .orElseThrow(() -> new EntityNotFoundException("Family not found with id: " + familyId));
         
-        // Before deleting a family, ensure all members are disassociated to avoid constraint violations
-        // Or handle this with cascading deletes if appropriate (careful with ManyToMany)
         if (!family.getMembers().isEmpty()) {
-            // Option 1: Disassociate members
-            // family.getMembers().forEach(member -> member.getFamilies().remove(family));
-            // userRepository.saveAll(family.getMembers());
-            // family.getMembers().clear();
-            // familyRepository.save(family); 
-            // Option 2: Throw error if family is not empty
              throw new DataIntegrityViolationException("Cannot delete family with id " + familyId + " as it still has members. Please remove members first.");
         }
         
         familyRepository.deleteById(familyId);
     }
 
+    @Transactional(readOnly = true)
     public FamilyDto getFamilyForCurrentUser() {
-        // TODO: Implement logic to get the family for the current authenticated user.
-        // This would typically involve:
-        // 1. Getting the current authenticated user from Spring Security context.
-        // 2. Finding the family associated with this user (e.g., user.getFamilies() if a user can belong to multiple, or a direct family_id foreign key).
-        // 3. If a user can be in multiple families, you might need a concept of a "current" or "primary" family, or return a list.
-        // 4. For now, assuming a user belongs to one primary family or you want to return the first one found.
-        // 5. Converting to FamilyDto.
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String username;
+        if (principal instanceof UserDetails) {
+            username = ((UserDetails)principal).getUsername();
+        } else {
+            username = principal.toString();
+        }
 
-        System.out.println("DEBUG: FamilyService.getFamilyForCurrentUser() called - placeholder implementation. Returning null.");
-        return null; // Placeholder - you'll likely want to throw an exception or return an Optional if no family is found.
+        User currentUser = userRepository.findByUsername(username)
+                .orElseThrow(() -> new EntityNotFoundException("Current user not found: " + username));
+
+        // Assuming a user belongs to one primary family or we take the first one.
+        // This logic might need refinement based on your exact requirements (e.g., if a user can be in multiple families)
+        if (currentUser.getFamilies() != null && !currentUser.getFamilies().isEmpty()) {
+            Family currentFamily = currentUser.getFamilies().iterator().next(); // Get the first family
+            return convertToDto(currentFamily);
+        }
+        return null; // Or throw an exception if a user is expected to always have a family
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserDto> getUsersForCurrentFamily() {
+        FamilyDto currentFamilyDto = getFamilyForCurrentUser();
+        if (currentFamilyDto == null) {
+            // Handle case where current user has no family or family couldn't be determined
+            return Collections.emptyList(); 
+        }
+
+        Family currentFamily = familyRepository.findById(currentFamilyDto.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Family not found with id: " + currentFamilyDto.getId()));
+
+        return currentFamily.getMembers().stream()
+                .map(this::convertToUserDto)
+                .collect(Collectors.toList());
     }
 
     private FamilyDto convertToDto(Family family) {
@@ -126,6 +147,18 @@ public class FamilyService {
         if (family.getMembers() != null) {
             dto.setMemberIds(family.getMembers().stream().map(User::getId).collect(Collectors.toSet()));
         }
+        return dto;
+    }
+
+    private UserDto convertToUserDto(User user) {
+        UserDto dto = new UserDto();
+        dto.setId(user.getId());
+        dto.setUsername(user.getUsername());
+        dto.setDisplayName(user.getDisplayName());
+        dto.setEmail(user.getEmail());
+        dto.setAvatar(user.getAvatar());
+        // dto.setIsOnline(user.getIsOnline()); // Assuming isOnline is a field in User model and UserDto
+        // Add other necessary fields from User to UserDto
         return dto;
     }
 } 

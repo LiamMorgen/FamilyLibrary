@@ -37,7 +37,7 @@ public class ActivityController {
         ActivityDto activity = activityService.getActivityById(id);
         return ResponseEntity.ok(activity);
     }
-
+    
     @GetMapping
     public ResponseEntity<List<ActivityDto>> getAllActivities(@RequestParam(required = false) String type) {
         List<ActivityDto> activities = activityService.getAllVisibleActivitiesForCurrentUser(type);

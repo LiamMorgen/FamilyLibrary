@@ -15,6 +15,10 @@ public interface ReadingHistoryRepository extends JpaRepository<ReadingHistory, 
 
     List<ReadingHistory> findByBook(Book book);
 
+    List<ReadingHistory> findByBookOrderByStartDateDesc(Book book);
+
+    List<ReadingHistory> findByUserAndBookOrderByStartDateDesc(User user, Book book);
+
     // Potentially: findByUserAndBook to check if a user has a history with a specific book
     // List<ReadingHistory> findByUserAndBook(User user, Book book);
 } 

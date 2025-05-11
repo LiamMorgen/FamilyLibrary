@@ -2,6 +2,7 @@ package com.familylibrary.controller;
 
 import com.familylibrary.dto.CreateFamilyRequest;
 import com.familylibrary.dto.FamilyDto;
+import com.familylibrary.dto.UserDto;
 import com.familylibrary.service.FamilyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -62,5 +63,11 @@ public class FamilyController {
         // 然后查询该用户所属的家庭。
         FamilyDto family = familyService.getFamilyForCurrentUser(); // 假设有这样一个方法
         return ResponseEntity.ok(family);
+    }
+
+    @GetMapping("/current/users")
+    public ResponseEntity<List<UserDto>> getCurrentFamilyMembers() {
+        List<UserDto> users = familyService.getUsersForCurrentFamily();
+        return ResponseEntity.ok(users);
     }
 } 

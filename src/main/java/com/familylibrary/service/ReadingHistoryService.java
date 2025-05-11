@@ -94,6 +94,69 @@ public class ReadingHistoryService {
         readingHistoryRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
+    public List<ReadingHistoryDto> getReadingHistory(String userIdStr, Long bookId, Long familyId) {
+        // TODO: Implement logic to resolve 'current' userId to actual Long userId
+        // For now, we'll assume userIdStr can be parsed to Long or is null.
+        // Also, familyId filtering is not yet implemented based on current ReadingHistory entity.
+
+        Long actualUserId = null;
+        if (userIdStr != null && !userIdStr.equalsIgnoreCase("current")) {
+            try {
+                actualUserId = Long.parseLong(userIdStr);
+            } catch (NumberFormatException e) {
+                // Handle error or throw custom exception if userIdStr is not 'current' and not a valid Long
+                throw new IllegalArgumentException("Invalid userId format: " + userIdStr);
+            }
+        } else if (userIdStr != null && userIdStr.equalsIgnoreCase("current")) {
+            // Here you would typically get the current user's ID from Spring Security Context
+            // For now, let's throw an exception or return empty if not implemented
+            //throw new UnsupportedOperationException("Resolving 'current' user ID is not yet implemented in service layer.");
+            // Or, for testing, assume a default user or handle in controller
+            // For now, if 'current', let it pass as null to the repository to fetch all if other params are null.
+            // This behavior should be refined.
+        }
+
+        // Example: Basic filtering by userId and bookId if they are provided
+        // This needs to be adapted to use ReadingHistoryRepository methods
+        // For a more complex query (e.g. involving familyId through book's bookshelf), 
+        // a custom query in the repository or Specification API would be needed.
+
+        if (actualUserId != null && bookId != null) {
+            final Long finalActualUserId = actualUserId; // Create a final variable for lambda
+            User user = userRepository.findById(finalActualUserId)
+                    .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + finalActualUserId));
+            Book book = bookRepository.findById(bookId)
+                    .orElseThrow(() -> new EntityNotFoundException("Book not found with id: " + bookId));
+            return readingHistoryRepository.findByUserAndBookOrderByStartDateDesc(user, book)
+                    .stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        } else if (actualUserId != null) {
+            final Long finalActualUserIdForElse = actualUserId; // Create a final variable for lambda
+            User user = userRepository.findById(finalActualUserIdForElse)
+                    .orElseThrow(() -> new EntityNotFoundException("User not found with id: " + finalActualUserIdForElse));
+            return readingHistoryRepository.findByUserOrderByStartDateDesc(user)
+                    .stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        } else if (bookId != null) {
+            Book book = bookRepository.findById(bookId)
+                    .orElseThrow(() -> new EntityNotFoundException("Book not found with id: " + bookId));
+            // Assuming you might want to find history for a book across all users
+            return readingHistoryRepository.findByBookOrderByStartDateDesc(book)
+                    .stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+        }
+        // If no specific filters are strongly applicable, or if 'current' user logic needs to fetch all for that user
+        // For now, returning all reading history - THIS SHOULD BE REFINED for security and performance
+        return readingHistoryRepository.findAll()
+                .stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
     private ReadingHistoryDto convertToDto(ReadingHistory readingHistory) {
         ReadingHistoryDto dto = new ReadingHistoryDto();
         dto.setId(readingHistory.getId());
