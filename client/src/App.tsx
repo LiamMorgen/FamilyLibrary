@@ -20,6 +20,7 @@ import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import { useTranslation } from "react-i18next";
 import SearchResultsPage from "@/pages/search-results";
+import ScanBookPage from "@/pages/ScanBookPage";
 
 const ProtectedRoute: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const { isAuthenticated, isLoadingUser, token } = useAuth();
@@ -52,6 +53,7 @@ function AppLayout() {
             <Route path="/search" element={<ProtectedRoute><SearchResultsPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/scan-book" element={<ProtectedRoute><ScanBookPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>

@@ -31,3 +31,30 @@ deepseek:
   api:
     key: sk-ee33a1b951a7456690267e15ea702b13
     # deepseek.api.url=https://api.deepseek.com/chat/completions (可选，如果URL不同) 
+
+google:
+  books:
+    api:
+      key: ${GOOGLE_BOOKS_API_KEY:AIzaSyB-ALXNqbR96HM_YmGJHTrLIGmfPq6w9x0} # 请在生产环境中使用环境变量
+  cloud:
+    vision:
+      # 推荐通过环境变量 GOOGLE_APPLICATION_CREDENTIALS 配置
+      # 这个环境变量应该指向一个JSON文件，包含Google Cloud服务账号的密钥
+      # 推荐方式：通过环境变量配置服务账户密钥文件路径
+      # credentials: ${GOOGLE_APPLICATION_CREDENTIALS} 
+      # 
+      # 或者，如果您希望直接在配置文件中指定密钥文件路径 (不推荐用于生产环境)
+      # credentials_path: "path/to/your/service-account-file.json"
+      # 
+      # 直接嵌入服务账户 JSON 内容 (极不推荐，仅作演示，注意YML格式和转义)
+      # service_account_json: | 
+      #   {
+      #     "type": "service_account",
+      #     "project_id": "your-project-id",
+      #     // ... 其他字段 ...
+      #     "private_key": "-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----\n",
+      #     "client_email": "your-service-account-email@your-project-id.iam.gserviceaccount.com",
+      #     // ... 其他字段 ...
+      #   }
+      # 注意：如果使用上述直接嵌入JSON的方式，您需要在BookScanService中修改逻辑以从这个嵌入的JSON字符串初始化Vision API客户端。
+      # 通常，Vision API 客户端库会自动查找 GOOGLE_APPLICATION_CREDENTIALS 环境变量。 

@@ -31,7 +31,8 @@
     "createFamily": "创建家庭",
     "createFamilyDescription": "创建一个家庭，邀请家人一起管理图书！",
     "createFamilyButton": "创建家庭",
-    "familyMembersCount": "{{count}}位成员"
+    "familyMembersCount": "{{count}}位成员",
+    "scanBook": "扫描图书"
   },
   "mobileNav": {
     "home": "首页",
@@ -290,5 +291,31 @@
     "bookshelf": "书架",
     "shelf": "层",
     "position": "位置"
+  },
+  "scanBook": {
+    "title": "扫描图书",
+    "uploadImage": "上传图片",
+    "selectImage": "选择图片",
+    "takePhoto": "拍照",
+    "captureButton": "拍摄",
+    "bookInfo": "图书信息",
+    "bookInfoTitle": "书名",
+    "noBookInfo": "暂无图书信息",
+    "noBookInfoFoundByApi": "未能从图片中识别出图书信息，请尝试其他图片或手动输入。",
+    "success": "识别成功",
+    "successDescription": "图书信息已成功识别",
+    "error": "识别失败",
+    "errorDescription": "无法识别图书信息，请重试",
+    "cameraNotSupported": "您的设备不支持相机功能",
+    "cameraAccessDenied": "无法访问相机，请检查权限设置",
+    "addToLibrary": "添加到图书库",
+    "authors": "作者",
+    "publisher": "出版社",
+    "publishedDate": "出版日期",
+    "isbn": "ISBN",
+    "unknownAuthor": "未知作者",
+    "unknownPublisher": "未知出版社",
+    "unknownDate": "未知日期",
+    "unknownIsbn": "未知ISBN"
   }
 }

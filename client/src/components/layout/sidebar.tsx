@@ -142,6 +142,18 @@ export default function Sidebar() {
                 </div>
               </Link>
             </li>
+            <li className="mb-1">
+              <Link to="/scan-book">
+                <div className={`flex items-center px-4 py-2 rounded-lg ${
+                  location.pathname === '/scan-book' 
+                    ? 'text-primary bg-accent/30' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}>
+                  <i className="fas fa-camera w-5"></i>
+                  <span className="ml-2">{t('sidebar.scanBook')}</span>
+                </div>
+              </Link>
+            </li>
           </ul>
         </nav>
         
